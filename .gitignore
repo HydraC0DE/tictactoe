@@ -1,0 +1,81 @@
+# .NET / MAUI standard ignores
+
+# Build results
+[Bb]in/
+[Oo]bj/
+out/
+*.exe
+*.dll
+*.pdb
+*.cache
+*.log
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# MAUI specific
+# Platform-specific build folders
+**/AppPackages/
+**/BundleArtifacts/
+**/bin/
+**/obj/
+**/Resources/Raw/*
+**/Resources/drawable/*
+**/Resources/mipmap-*/
+
+# Android stuff
+*.apk
+*.aab
+*.keystore
+
+# iOS/macOS
+*.app
+*.ipa
+*.dSYM
+xcuserdata/
+*.xcuserstate
+
+# Windows
+*.appx
+*.appxbundle
+*.msix
+*.msixbundle
+
+# Logs and temporary
+*.tmp
+*.temp
+*.log
+*.vspscc
+*.vssscc
+*.orig
+*.bak
+
+# Visual Studio
+.vs/
+*.dbmdl
+*.bak
+*.FileListAbsolute.txt
+
+# JetBrains Rider
+.idea/
+*.iml
+
+# Mac system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Node/Frontend (if you add BlazorHybrid or JS interop later)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Others
+Thumbs.db
