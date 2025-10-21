@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<Shell
+<!--<Shell
     x:Class="tictactoe.AppShell"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:views="clr-namespace:tictactoe.Views"
     xmlns:local="clr-namespace:tictactoe"
     Title="tictactoe">
 
@@ -11,4 +12,31 @@
         ContentTemplate="{DataTemplate local:MainPage}"
         Route="MainPage" />
 
+</Shell>-->
+
+<!--<Shell
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:views="clr-namespace:tictactoe.Views"
+    x:Class="tictactoe.AppShell">
+
+    <TabBar>
+        
+        <ShellContent Title="History" Icon="icon_history.png" ContentTemplate="{DataTemplate views:HistoryPage}" />
+        <ShellContent Title="Play" Icon="icon_play.png" ContentTemplate="{DataTemplate views:PlayPage}" />
+        <ShellContent Title="Take a picture" Icon="picture.png" ContentTemplate="{DataTemplate views:PicturePage}" />
+    </TabBar>
+</Shell>-->
+
+<Shell xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+       xmlns:views="clr-namespace:tictactoe.Views"
+       x:Class="tictactoe.AppShell">
+
+    <TabBar>
+        <ShellContent Title="History" ContentTemplate="{DataTemplate views:HistoryPage}" />
+        <ShellContent Title="Play" Route="play" ContentTemplate="{DataTemplate views:PlayPage}" />
+        <ShellContent Title="Picture" ContentTemplate="{DataTemplate views:PicturePage}" />
+    </TabBar>
 </Shell>
+

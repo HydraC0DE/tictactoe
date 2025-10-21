@@ -1,4 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
+using tictactoe.Services;
+using tictactoe.Models;
 
 namespace tictactoe
 {
@@ -18,6 +20,9 @@ namespace tictactoe
 #if DEBUG
     		builder.Logging.AddDebug();
 #endif
+            builder.Services.AddSingleton<ITicTacToeSolver, TicTacToeSolver>();
+            //builder.Services.AddSingleton<MatchRepository>();
+            builder.Services.AddSingleton<ITicTacToeSolver, TicTacToeSolver>();
 
             return builder.Build();
         }

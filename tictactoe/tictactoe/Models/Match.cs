@@ -1,0 +1,19 @@
+﻿using SQLite;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace tictactoe.Models
+{
+    public class Match
+    {
+        [PrimaryKey, AutoIncrement]
+        public int Id { get; set; }
+        public string BoardImagePath { get; set; }
+        public string MoveSuggestion { get; set; }
+        public DateTime Date { get; set; }
+        public bool UserWon { get; set; }
+    }
+}
