@@ -1,6 +1,7 @@
 using System.Text.Json;
 using tictactoe.Models;
 using System.Globalization;
+using tictactoe.Data;
 
 namespace tictactoe.Views;
 
@@ -8,7 +9,7 @@ namespace tictactoe.Views;
 public partial class MatchDetailPage : ContentPage
 {
     private Match _match;
-
+    private readonly MatchRepository _repo;
     public string MatchJson
     {
         set
@@ -23,9 +24,10 @@ public partial class MatchDetailPage : ContentPage
         }
     }
 
-    public MatchDetailPage()
+    public MatchDetailPage(MatchRepository repo) //it doesnt get the match directly so i can refresh the map 
     {
         InitializeComponent();
+        _repo = repo;
     }
 
     private void GenerateMapHtml()
@@ -73,18 +75,35 @@ public partial class MatchDetailPage : ContentPage
     }
 
     // Optional: minimal CRUD handlers
-    private async void OnAddClicked(object sender, EventArgs e)
-    {
-        await DisplayAlert("Info", "Add clicked", "OK");
-    }
-
     private async void OnEditClicked(object sender, EventArgs e)
     {
-        await DisplayAlert("Info", "Edit clicked", "OK");
+        if (_match == null) return;
+
+        // Example: edit Result (you could show a popup to get new value)
+        string newResult = await DisplayPromptAsync("Edit Match", "Enter new result:", initialValue: _match.Result);
+        if (!string.IsNullOrEmpty(newResult))
+        {
+            _match.Result = newResult;
+            await _repo.UpdateMatchAsync(_match);
+            await DisplayAlert("Success", "Match updated!", "OK");
+
+            // Refresh the map popup text
+            GenerateMapHtml();
+        }
     }
 
     private async void OnDeleteClicked(object sender, EventArgs e)
     {
-        await DisplayAlert("Info", "Delete clicked", "OK");
+        if (_match == null) return;
+
+        bool confirm = await DisplayAlert("Confirm Delete",
+            $"Are you sure you want to delete match '{_match.Result}'?",
+            "Yes", "No");
+
+        if (confirm)
+        {
+            await _repo.DeleteMatchAsync(_match);
+            await Shell.Current.GoToAsync(".."); // Navigate back to list
+        }
     }
 }

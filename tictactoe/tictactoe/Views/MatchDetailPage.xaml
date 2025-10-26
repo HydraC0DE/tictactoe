@@ -10,7 +10,8 @@
                  HeightRequest="400" />
 
         <HorizontalStackLayout Spacing="10" HorizontalOptions="Center">
-
+            <Button Text="Edit" Clicked="OnEditClicked"/>
+            <Button Text="Delete" Clicked="OnDeleteClicked"/>
         </HorizontalStackLayout>
 
     </VerticalStackLayout>
