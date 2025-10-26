@@ -70,7 +70,7 @@ public partial class MatchDetailPage : ContentPage
 </script>
 </body>
 </html>";
-        ;
+        
         MapWebView.Source = new HtmlWebViewSource { Html = html };
     }
 
