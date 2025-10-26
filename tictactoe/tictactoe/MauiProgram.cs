@@ -2,6 +2,7 @@
 using tictactoe.Services;
 using tictactoe.Models;
 using tictactoe.Data;
+using tictactoe.Views;
 
 namespace tictactoe
 {
@@ -23,7 +24,10 @@ namespace tictactoe
 #endif
             builder.Services.AddSingleton<ITicTacToeSolver, TicTacToeSolver>();
             builder.Services.AddSingleton<MatchRepository>();
-            builder.Services.AddSingleton<ITicTacToeSolver, TicTacToeSolver>();
+            builder.Services.AddSingleton<HistoryPage>();
+            builder.Services.AddSingleton<PlayPage>();
+
+
 
             return builder.Build();
         }

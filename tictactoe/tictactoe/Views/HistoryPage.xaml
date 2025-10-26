@@ -2,13 +2,19 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="tictactoe.Views.HistoryPage"
-             Title="History">
+             Title="Match History">
 
-    <CollectionView x:Name="MatchesList">
-        <CollectionView.ItemTemplate>
+    <ListView x:Name="MatchesList"
+              ItemSelected="OnMatchSelected"
+              HasUnevenRows="True"
+              SeparatorVisibility="Default">
+        <ListView.ItemTemplate>
             <DataTemplate>
-                <Label Text="{Binding Result}" />
+                <TextCell Text="{Binding Result}"
+                          Detail="{Binding Date}" />
             </DataTemplate>
-        </CollectionView.ItemTemplate>
-    </CollectionView>
+        </ListView.ItemTemplate>
+    </ListView>
+
 </ContentPage>
+
