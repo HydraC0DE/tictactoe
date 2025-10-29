@@ -18,16 +18,17 @@ namespace tictactoe
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                     fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
                 });
-
+            string dbPath = Path.Combine(FileSystem.AppDataDirectory, "matches.db");
 #if DEBUG
-    		builder.Logging.AddDebug();
+            builder.Logging.AddDebug();
 #endif
             builder.Services.AddSingleton<ITicTacToeSolver, TicTacToeSolver>();
-            builder.Services.AddSingleton<MatchRepository>();
+            builder.Services.AddSingleton(new MatchRepository(dbPath));
             builder.Services.AddSingleton<HistoryPage>();
             builder.Services.AddSingleton<PlayPage>();
 
-
+            
+           
 
             return builder.Build();
         }

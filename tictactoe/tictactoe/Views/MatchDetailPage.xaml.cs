@@ -66,7 +66,7 @@ public partial class MatchDetailPage : ContentPage
     // Add a marker for the match
     L.marker([{lat}, {lon}])
         .addTo(map)
-        .bindPopup('<b>{_match.Result}</b><br>{_match.Date}');
+        .bindPopup('<b>{_match.Result}</b><br>{_match.Date.ToString()}');
 </script>
 </body>
 </html>";

@@ -4,19 +4,16 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using tictactoe.Models;
 
 namespace tictactoe.Services
 {
     public interface ITicTacToeSolver
     {
-        Task<string> GetBestMoveAsync(string boardImagePath);
+        Task<Game> ProcessImageAsync(string boardImagePath);
+
+        Task<(int row, int col)> GetBestMoveAsync(Game game);
     }
 
-    //public class TicTacToeSolverMock : ITicTacToeSolver
-    //{
-    //    public Move GetBestMove(Board board)
-    //    {
-    //        return new Move(0, 0); // mock example
-    //    }
-    //}
+
 }

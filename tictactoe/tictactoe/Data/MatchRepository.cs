@@ -8,30 +8,19 @@ using tictactoe.Models;
 
 namespace tictactoe.Data
 {
-    //public class MatchRepository
-    //{
-    //    private readonly SQLiteAsyncConnection _db;
-
-    //    public MatchRepository()
-    //    {
-    //        string dbPath = Path.Combine(FileSystem.AppDataDirectory, "matches.db");
-    //        _db = new SQLiteAsyncConnection(dbPath);
-    //        _db.CreateTableAsync<Match>().Wait();
-    //    }
-
-    //    public Task<List<Match>> GetAllMatchesAsync() => _db.Table<Match>().ToListAsync();
-
-    //    public Task AddMatchAsync(Match match) => _db.InsertAsync(match);
-
-    //}
-
     public class MatchRepository
     {
         private readonly SQLiteAsyncConnection _db;
 
-        public MatchRepository()
+        public MatchRepository() // old init, the other one is used currently
         {
             string dbPath = Path.Combine(FileSystem.AppDataDirectory, "matches.db");
+            _db = new SQLiteAsyncConnection(dbPath);
+            _db.CreateTableAsync<Match>().Wait();
+        }
+
+        public MatchRepository(string dbPath)
+        {
             _db = new SQLiteAsyncConnection(dbPath);
             _db.CreateTableAsync<Match>().Wait();
         }
