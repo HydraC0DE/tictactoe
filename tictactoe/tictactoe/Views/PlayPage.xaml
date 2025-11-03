@@ -2,22 +2,28 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="tictactoe.Views.PlayPage"
              Title="Play">
+    <ScrollView>
 
-    <VerticalStackLayout Padding="20" Spacing="20" HorizontalOptions="Center" VerticalOptions="Start">
-        <Label x:Name="lblBestMove"
-               Text="Solver move will appear here"
-               FontSize="20"
-               HorizontalOptions="Center" />
+        <VerticalStackLayout Padding="20" Spacing="20" HorizontalOptions="Center" VerticalOptions="Start">
+            <Label x:Name="lblBestMove"
+           Text="Solver move will appear here"
+           FontSize="20"
+           HorizontalOptions="Center" />
 
-        <Grid x:Name="BoardGrid"
-              WidthRequest="300"
-              HeightRequest="300"
-              BackgroundColor="#eee">
-            <!-- Placeholder for TicTacToe board -->
-        </Grid>
+            <VerticalStackLayout>
+                <ScrollView Orientation="Both">
+                    <Grid x:Name="BoardGrid" />
+                </ScrollView>
+                <Button x:Name="btnAIMove" Text="Get AI Move" Clicked="OnGetAIMoveClicked" />
+            </VerticalStackLayout>
 
-        <Button Text="Save Match"
-                Clicked="OnSaveMatchClicked"
-                HorizontalOptions="Center" />
-    </VerticalStackLayout>
+
+            <Button Text="Save Match"
+            Clicked="OnSaveMatchClicked"
+            HorizontalOptions="Center" />
+        </VerticalStackLayout>
+
+
+    </ScrollView>
+    
 </ContentPage>

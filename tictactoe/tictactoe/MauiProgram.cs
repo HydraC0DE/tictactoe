@@ -25,10 +25,17 @@ namespace tictactoe
             builder.Services.AddSingleton<ITicTacToeSolver, TicTacToeSolver>();
             builder.Services.AddSingleton(new MatchRepository(dbPath));
             builder.Services.AddSingleton<HistoryPage>();
-            builder.Services.AddSingleton<PlayPage>();
+            builder.Services.AddSingleton<PlayPage>(sp =>
+            {
+                var repo = sp.GetRequiredService<MatchRepository>();
+                var solver = sp.GetRequiredService<ITicTacToeSolver>();
+                return new PlayPage(repo, solver);
+            });
 
-            
-           
+            builder.Services.AddTransient<MatchDetailPage>();
+
+
+
 
             return builder.Build();
         }

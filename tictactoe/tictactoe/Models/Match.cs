@@ -21,6 +21,9 @@ namespace tictactoe.Models
         public double Latitude { get; set; } 
         public double Longitude { get; set; }
 
+        public string Result { get; set; }
+
+
         [Ignore]
         public Game CurrentGame
         {

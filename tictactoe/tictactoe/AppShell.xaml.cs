@@ -7,6 +7,7 @@ namespace tictactoe
         {
             InitializeComponent();
             Routing.RegisterRoute(nameof(MatchDetailPage), typeof(MatchDetailPage));
+            Routing.RegisterRoute("playpage", typeof(PlayPage));
         }
     }
 }

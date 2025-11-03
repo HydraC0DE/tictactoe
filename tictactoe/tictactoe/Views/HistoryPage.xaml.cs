@@ -30,7 +30,7 @@ namespace tictactoe.Views
                 // Pass only what you need
                 var lat = selectedMatch.Latitude;
                 var lon = selectedMatch.Longitude;
-                var result = Uri.EscapeDataString(selectedMatch.Result);
+                var result = Uri.EscapeDataString(selectedMatch.CurrentGame.Result);
                 var jsonMatch = JsonSerializer.Serialize(selectedMatch);
 
                 await Shell.Current.GoToAsync($"{nameof(MatchDetailPage)}?match={Uri.EscapeDataString(jsonMatch)}");

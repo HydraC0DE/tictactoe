@@ -9,6 +9,7 @@ namespace tictactoe.Views;
 
 public partial class PicturePage : ContentPage
 {
+    private string _photoPathPersistent;
     private readonly ITicTacToeSolver _solver;
     private string _solverResult;
     private Game _detectedGame;
@@ -52,16 +53,29 @@ public partial class PicturePage : ContentPage
             FileResult photo = await MediaPicker.Default.CapturePhotoAsync();
             if (photo == null) return;
 
-            string localFilePath = Path.Combine(FileSystem.CacheDirectory, photo.FileName);
-            using Stream sourceStream = await photo.OpenReadAsync();
-            using FileStream localFileStream = File.OpenWrite(localFilePath);
-            await sourceStream.CopyToAsync(localFileStream);
-            imgPreview.Source = ImageSource.FromFile(localFilePath);
+            string cachePath = Path.Combine(FileSystem.CacheDirectory, photo.FileName);
+            using (Stream sourceStream = await photo.OpenReadAsync())
+            using (FileStream cacheStream = File.OpenWrite(cachePath))
+            {
+                await sourceStream.CopyToAsync(cacheStream);
+            }
 
-            // Step 1: process image → game state
-            _detectedGame = await _solver.ProcessImageAsync(localFilePath);
 
-            // Step 2: get best move suggestion
+
+
+            string ext = Path.GetExtension(photo.FileName);
+            string destFileName = $"{Guid.NewGuid()}{ext}";
+            string destPath = Path.Combine(FileSystem.AppDataDirectory, destFileName);
+
+            File.Copy(cachePath, destPath, overwrite: false);
+
+            _photoPathPersistent = destPath;
+
+            imgPreview.Source = ImageSource.FromFile(cachePath);
+
+            _detectedGame = await _solver.ProcessImageAsync(cachePath);
+            
+            
             _suggestedMove = await _solver.GetBestMoveAsync(_detectedGame);
 
             btnGoToPlay.IsVisible = true;
@@ -81,10 +95,19 @@ public partial class PicturePage : ContentPage
     {
         if (_detectedGame != null)
         {
+            //string gameJson = JsonSerializer.Serialize(_detectedGame);
+
+            //await Shell.Current.GoToAsync(
+            //    $"///play?game={Uri.EscapeDataString(gameJson)}&row={_suggestedMove.row}&col={_suggestedMove.col}"
+            //);
+
             string gameJson = JsonSerializer.Serialize(_detectedGame);
             await Shell.Current.GoToAsync(
-                $"///play?game={Uri.EscapeDataString(gameJson)}&row={_suggestedMove.row}&col={_suggestedMove.col}"
+                $"///play?game={Uri.EscapeDataString(gameJson)}" +
+                $"&row={_suggestedMove.row}&col={_suggestedMove.col}" +
+                $"&photoPath={Uri.EscapeDataString(_photoPathPersistent)}"
             );
+
         }
     }
 

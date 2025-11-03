@@ -5,16 +5,24 @@
              Title="Match History">
 
     <ListView x:Name="MatchesList"
-              ItemSelected="OnMatchSelected"
-              HasUnevenRows="True"
-              SeparatorVisibility="Default">
+          ItemSelected="OnMatchSelected"
+          HasUnevenRows="True"
+          SeparatorVisibility="Default">
+
         <ListView.ItemTemplate>
             <DataTemplate>
-                <TextCell Text="{Binding Result}"
-                          Detail="{Binding Date}" />
+                <ViewCell>
+                    <StackLayout Padding="10">
+                        <Label Text="{Binding Result, StringFormat='Winner of the game: {0}'}" FontAttributes="Bold" />
+                        <Label Text="{Binding Date, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" />
+                        <Label Text="{Binding Latitude, StringFormat='Lat: {0:F5}'}" />
+                        <Label Text="{Binding Longitude, StringFormat='Lon: {0:F5}'}" />
+                    </StackLayout>
+                </ViewCell>
             </DataTemplate>
         </ListView.ItemTemplate>
     </ListView>
+
 
 </ContentPage>
 
