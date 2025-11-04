@@ -17,7 +17,7 @@ namespace tictactoe.Models
         [JsonIgnore]
         public const int K = 5;
         [JsonIgnore]
-        public int[,] Board { get; private set; } = new int[SIZE, SIZE];
+        public int[,] Board { get; set; } = new int[SIZE, SIZE];
         [JsonPropertyName("NextMove")]
         public string NextMove { get; internal set; } = "X";
         [JsonPropertyName("IsTerminal")]

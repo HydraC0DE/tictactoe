@@ -33,6 +33,7 @@ namespace tictactoe
             });
 
             builder.Services.AddTransient<MatchDetailPage>();
+            builder.Services.AddSingleton<IImageProcessor, ImageProcessor>();
 
 
 

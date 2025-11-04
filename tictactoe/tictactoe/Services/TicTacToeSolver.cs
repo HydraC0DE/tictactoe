@@ -417,11 +417,7 @@ namespace tictactoe.Services
             return result;
         }
 
-        public async Task<Game> ProcessImageAsync(string boardImagePath)
-        {
-            CurrentGame = new Game();
-            return CurrentGame;
-        }
+        
     }
 
     

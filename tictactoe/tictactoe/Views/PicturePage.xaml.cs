@@ -11,14 +11,16 @@ public partial class PicturePage : ContentPage
 {
     private string _photoPathPersistent;
     private readonly ITicTacToeSolver _solver;
+    private readonly IImageProcessor _imageProcessor;
     private string _solverResult;
     private Game _detectedGame;
     private (int row, int col) _suggestedMove;
 
-    public PicturePage(ITicTacToeSolver solver)
+    public PicturePage(ITicTacToeSolver solver, IImageProcessor processor)
     {
         InitializeComponent();
         _solver = solver;
+        _imageProcessor = processor;
     }
 
     private async Task TakePhotoAsync()
@@ -73,7 +75,7 @@ public partial class PicturePage : ContentPage
 
             imgPreview.Source = ImageSource.FromFile(cachePath);
 
-            _detectedGame = await _solver.ProcessImageAsync(cachePath);
+            _detectedGame = await _imageProcessor.ProcessImageAsync(cachePath);
             
             
             _suggestedMove = await _solver.GetBestMoveAsync(_detectedGame);

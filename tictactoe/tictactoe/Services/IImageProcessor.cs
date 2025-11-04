@@ -1,5 +1,4 @@
-﻿using Android.Bluetooth;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,12 +7,8 @@ using tictactoe.Models;
 
 namespace tictactoe.Services
 {
-    public interface ITicTacToeSolver
+    public interface IImageProcessor
     {
-      
-
-        Task<(int row, int col)> GetBestMoveAsync(Game game);
+        Task<Game> ProcessImageAsync(string boardImagePath);
     }
-
-
 }
