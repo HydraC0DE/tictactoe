@@ -1,5 +1,6 @@
 ﻿using Android.Content;
 using Android.Provider;
+using Microsoft.Maui.Controls.Shapes;
 using OpenCvSharp;
 using OpenCvSharp.XPhoto;
 using System.IO;
@@ -35,160 +36,6 @@ namespace tictactoe.Services
         }
 
 
-
-        public async Task<Game> ProcessImageAsync2(string boardImagePath)
-        {
-            var mat = Cv2.ImRead(boardImagePath, ImreadModes.Color);
-
-            // 1. Convert to grayscale for single-channel processing
-            using var gray = new Mat();
-            Cv2.CvtColor(mat, gray, ColorConversionCodes.BGR2GRAY);
-
-            // Compute simple brightness metric
-            Scalar meanVal = Cv2.Mean(gray);
-            double brightness = meanVal.Val0; // 0=dark, 255=bright
-
-
-            // 2. Bilateral filter
-            // Reduces noise while preserving grid edges
-            using var denoise = new Mat();
-            Cv2.BilateralFilter(gray, denoise, 9, 75, 75);
-
-            // 3. Adaptive threshold
-            // Converts grayscale to strong black and white
-            // BLOCK SIZE (51):
-            //   Increase = thicker grid, helps when flash is ON
-            //   Decrease = less aggressive, helps in low-light or noisy images
-            //
-            // CONSTANT C (7):
-            //   Increase = more white turns to black (keeps grid but noise too)
-            //   Decrease = more black turns to white (thickens bright grid lines)
-            // Dynamic tuning
-            int blockSize;
-            int constantC;
-            int kernelSize;
-
-            // Bright image (flash) = grid already white → lower threshold aggression
-            if (brightness > 180)
-            {
-                blockSize = 31;
-                constantC = 2;
-                kernelSize = 7; //5
-                ;
-            }
-            // Medium brightness = default, best resuts so far
-            else if (brightness > 90)
-            {
-                blockSize = 51;
-                constantC = 3;
-                kernelSize = 7;
-                ;
-            }
-            // Dark image (no flash) = aggressive to keep faint grid
-            else
-            {
-                blockSize = 71;
-                constantC = 8;
-                kernelSize = 7; //9
-                ;
-            }
-
-
-            using var thresh = new Mat();
-            Cv2.AdaptiveThreshold(
-                denoise,
-                thresh,
-                255,
-                AdaptiveThresholdTypes.MeanC,
-                ThresholdTypes.BinaryInv,
-                blockSize,   // Odd number. Try 31→71 depending on lighting.
-                constantC     // Try 3→15 depending on visibility of grid.
-            );
-
-            // 4. Morphological closing
-            // Connects broken grid segments
-            // KERNEL SIZE (7x7):
-            //   Increase = thicker lines and better continuity (good for faint grid)
-            //   Decrease = thinner lines and less noise (good for dark/no-flash)
-            using var kernel = Cv2.GetStructuringElement(
-                MorphShapes.Rect,
-                new OpenCvSharp.Size(7, 7)
-            );
-            using var morph = new Mat();
-            Cv2.MorphologyEx(thresh, morph, MorphTypes.Close, kernel);
-
-            // Debug output of grid mask
-            var context = Android.App.Application.Context;
-            await SaveToGalleryAsync(context, morph, "debug_grid_mask.png");
-            //ROTATE CORRECTLY!!!!!!!!!!
-
-
-            // 1. Detect line segments on the binary mask
-            LineSegmentPoint[] lines = Cv2.HoughLinesP(
-                morph,        // binary mask
-                1,
-                Math.PI / 180,
-                120,          // votes threshold, increase to ignore noise
-                70,           // min line length, ignore short lines from X/O
-                10            // max gap
-            );
-
-            // 2. Separate vertical and horizontal lines with narrow angle tolerance
-            var verticalLines = new List<LineSegmentPoint>();
-            var horizontalLines = new List<LineSegmentPoint>();
-
-            foreach (var line in lines)
-            {
-                double dx = line.P2.X - line.P1.X;
-                double dy = line.P2.Y - line.P1.Y;
-                double angle = Math.Atan2(dy, dx) * 180.0 / Math.PI;
-
-                if (Math.Abs(angle) > 80) verticalLines.Add(line);   // strict vertical
-                else if (Math.Abs(angle) < 10) horizontalLines.Add(line); // strict horizontal
-            }
-
-            // 3. Compute line positions (average of endpoints) for clustering
-            List<int> verticalPositions = verticalLines
-                .Select(l => (l.P1.X + l.P2.X) / 2)
-                .ToList();
-
-            List<int> horizontalPositions = horizontalLines
-                .Select(l => (l.P1.Y + l.P2.Y) / 2)
-                .ToList();
-
-            // 4. Cluster nearby lines and take the average per cluster
-            verticalPositions = ClusterLines(verticalPositions, 7);   // tolerance ~7px
-            horizontalPositions = ClusterLines(horizontalPositions, 7);
-
-            // 5. Generate cell ROIs from intersections
-            var cellROIs = new List<OpenCvSharp.Rect>();
-            for (int i = 0; i < verticalPositions.Count - 1; i++)
-            {
-                for (int j = 0; j < horizontalPositions.Count - 1; j++)
-                {
-                    int x = verticalPositions[i];
-                    int y = horizontalPositions[j];
-                    int w = verticalPositions[i + 1] - x;
-                    int h = horizontalPositions[j + 1] - y;
-                    cellROIs.Add(new OpenCvSharp.Rect(x, y, w, h));
-                }
-            }
-
-            // 6. Optional: draw ROIs on the mask for debugging
-            using var debug = new Mat();
-            Cv2.CvtColor(morph, debug, ColorConversionCodes.GRAY2BGR);
-            foreach (var roi in cellROIs)
-            {
-                Cv2.Rectangle(debug, roi, Scalar.Red, 2);
-            }
-            await SaveToGalleryAsync(context, debug, "debug_cells_clean.png");
-
-
-
-
-            return new Game();
-
-        }
         List<int> ClusterLinesAggressive(List<int> positions, int tolerance, int mergeTolerance)
         {
             if (positions.Count == 0) return positions;
@@ -232,29 +79,6 @@ namespace tictactoe.Services
 
             return merged;
         }
-        List<int> ClusterLines(List<int> positions, int tolerance)
-        {
-            if (positions.Count == 0) return positions;
-
-            var sorted = positions.OrderBy(x => x).ToList();
-            var clusters = new List<List<int>>();
-            var currentCluster = new List<int> { sorted[0] };
-
-            for (int i = 1; i < sorted.Count; i++)
-            {
-                if (sorted[i] - currentCluster.Last() <= tolerance)
-                    currentCluster.Add(sorted[i]);
-                else
-                {
-                    clusters.Add(currentCluster);
-                    currentCluster = new List<int> { sorted[i] };
-                }
-            }
-            clusters.Add(currentCluster);
-
-            return clusters.Select(c => (int)c.Average()).OrderBy(x => x).ToList();
-        }
-
 
         public async Task<Game> ProcessImageAsync(string boardImagePath)
         {
@@ -290,98 +114,218 @@ namespace tictactoe.Services
             var context = Android.App.Application.Context;
             await SaveToGalleryAsync(context, morph, "debug_grid_mask.png");
 
-            //// --- 2. Detect long lines for rotation ---
-            //LineSegmentPoint[] lines = Cv2.HoughLinesP(morph, 1, Math.PI / 180, 120, 70, 10);
+            //rotate here
 
-            //// Select the longest vertical-ish line
-            //LineSegmentPoint bestLine = new LineSegmentPoint();
-            //double bestLength = 0;
-            //foreach (var line in lines)
-            //{
-            //    double dx = line.P2.X - line.P1.X;
-            //    double dy = line.P2.Y - line.P1.Y;
-            //    double angle = Math.Atan2(dy, dx) * 180.0 / Math.PI;
-            //    if (Math.Abs(angle) > 75) // near vertical
-            //    {
-            //        double len = Math.Sqrt(dx * dx + dy * dy);
-            //        if (len > bestLength) { bestLength = len; bestLine = line; }
-            //    }
-            //}
+            // 1) Hough detect (use the morph mask you already computed)
+            LineSegmentPoint[] hough = Cv2.HoughLinesP(
+                morph,          // binary mask
+                1,              // rho
+                Math.PI / 180,  // theta
+                80,             // threshold (votes) - tuned to pick strong lines
+                Math.Max(30, morph.Width / 10), // minLineLength (tweakable)
+                Math.Max(5, morph.Width / 200)   // maxLineGap
+            );
 
-            //// Fallback: longest line if no vertical
-            //if (bestLine == null && lines.Length > 0)
-            //    bestLine = lines.OrderByDescending(l => Math.Sqrt(Math.Pow(l.P2.X - l.P1.X, 2) + Math.Pow(l.P2.Y - l.P1.Y, 2))).First();
+            // debug: visualize Hough lines and compute simple stats
+            var linesForDebug = hough ?? Array.Empty<LineSegmentPoint>();
 
-            //// --- 3. Rotate board based on dominant line ---
-            //double dxBest = bestLine.P2.X - bestLine.P1.X;
-            //double dyBest = bestLine.P2.Y - bestLine.P1.Y;
-            //double rotationDeg = Math.Atan2(dyBest, dxBest) * 180.0 / Math.PI - 90.0;
+            // Create color overlay for visualization
+            using var overlay = new Mat();
+            Cv2.CvtColor(morph, overlay, ColorConversionCodes.GRAY2BGR);
 
-            //var center = new Point2f(mat.Width * 0.5f, mat.Height * 0.5f);
-            //var rotMat = Cv2.GetRotationMatrix2D(center, -rotationDeg, 1.0);
-            //double cos = Math.Abs(rotMat.At<double>(0, 0));
-            //double sin = Math.Abs(rotMat.At<double>(0, 1));
-            //int newWidth = (int)(mat.Height * sin + mat.Width * cos);
-            //int newHeight = (int)(mat.Height * cos + mat.Width * sin);
-            //rotMat.Set(0, 2, rotMat.At<double>(0, 2) + (newWidth / 2.0 - center.X));
-            //rotMat.Set(1, 2, rotMat.At<double>(1, 2) + (newHeight / 2.0 - center.Y));
+            // Collect stats
+            var angles = new List<double>();
+            var lengths = new List<double>();
+            var horizontalDetected = new List<LineSegmentPoint>();
+            var verticalDetected = new List<LineSegmentPoint>();
+            var obliqueDetected = new List<LineSegmentPoint>();
 
-            //using var rotatedMat = new Mat();
-            //Cv2.WarpAffine(mat, rotatedMat, rotMat, new OpenCvSharp.Size(newWidth, newHeight),
-            //               InterpolationFlags.Linear, BorderTypes.Constant, Scalar.All(255));
+            foreach (var ln in linesForDebug)
+            {
+                double dx = ln.P2.X - ln.P1.X;
+                double dy = ln.P2.Y - ln.P1.Y;
+                double length = Math.Sqrt(dx * dx + dy * dy);
+                double angleDeg = Math.Atan2(dy, dx) * 180.0 / Math.PI;
 
-            //// Rotate the mask too for consistent line detection
-            //using var rotatedMask = new Mat();
-            //Cv2.WarpAffine(morph, rotatedMask, rotMat, new OpenCvSharp.Size(newWidth, newHeight),
-            //               InterpolationFlags.Linear, BorderTypes.Constant, Scalar.All(0));
+                Scalar color;
 
-            //// --- 4. Detect lines again on rotated mask ---
-            //LineSegmentPoint[] rotatedLines = Cv2.HoughLinesP(rotatedMask, 1, Math.PI / 180, 120, 70, 10);
-            //var verticalLines = new List<LineSegmentPoint>();
-            //var horizontalLines = new List<LineSegmentPoint>();
+                if (Math.Abs(angleDeg) > 80) // vertical-ish
+                {
+                    verticalDetected.Add(ln);
+                    color = new Scalar(0, 255, 0);  // green
+                }
+                else if (Math.Abs(angleDeg) < 10) // horizontal-ish
+                {
+                    horizontalDetected.Add(ln);
+                    color = new Scalar(255, 0, 0); // blue
+                }
+                else
+                {
+                    obliqueDetected.Add(ln);
+                    color = new Scalar(0, 255, 255); // yellow
+                }
 
-            //foreach (var line in rotatedLines)
-            //{
-            //    double dx = line.P2.X - line.P1.X;
-            //    double dy = line.P2.Y - line.P1.Y;
-            //    double angle = Math.Atan2(dy, dx) * 180.0 / Math.PI;
+                int thickness = Math.Min(6, Math.Max(1, (int)(length / Math.Max(1, morph.Width / 200.0))));
+                Cv2.Line(overlay, ln.P1, ln.P2, color, thickness);
+            }
 
-            //    if (Math.Abs(angle) > 80) verticalLines.Add(line);
-            //    else if (Math.Abs(angle) < 10) horizontalLines.Add(line);
-            //}
+            // Compute diagnostics (median, weighted mean by length, longest)
+            double medianAngle = 0.0;
+            double weightedMean = 0.0;
+            double longest = 0.0;
+            int count = angles.Count;
 
-            //// --- 5. Cluster positions ---
-            //List<int> verticalPositions = verticalLines.Select(l => (l.P1.X + l.P2.X) / 2).ToList();
-            //List<int> horizontalPositions = horizontalLines.Select(l => (l.P1.Y + l.P2.Y) / 2).ToList();
+            if (count > 0)
+            {
+                var sortedAngles = angles.OrderBy(a => a).ToList();
+                medianAngle = (count % 2 == 1) ? sortedAngles[count / 2] : (sortedAngles[count / 2 - 1] + sortedAngles[count / 2]) / 2.0;
 
-            //verticalPositions = ClusterLines(verticalPositions, 7);
-            //horizontalPositions = ClusterLines(horizontalPositions, 7);
+                // weighted mean (weight = line length)
+                double sumw = 0, sumwa = 0;
+                for (int i = 0; i < count; i++)
+                {
+                    double dx = linesForDebug[i].P2.X - linesForDebug[i].P1.X;
+                    double dy = linesForDebug[i].P2.Y - linesForDebug[i].P1.Y;
+                    double len = Math.Sqrt(dx * dx + dy * dy);
+                    sumw += len;
+                    sumwa += (NormalizeAngleForMean(angles[i]) * len); // helper below
+                    if (len > longest) longest = len;
+                }
+                if (sumw > 0) weightedMean = sumwa / sumw;
+                // normalize back to -180..180 for display
+                weightedMean = NormalizeAngleFromMean(weightedMean);
+            }
 
-            //// --- 6. Generate cell ROIs ---
-            //var cellROIs = new List<OpenCvSharp.Rect>();
-            //for (int i = 0; i < verticalPositions.Count - 1; i++)
-            //{
-            //    for (int j = 0; j < horizontalPositions.Count - 1; j++)
-            //    {
-            //        int x = verticalPositions[i];
-            //        int y = horizontalPositions[j];
-            //        int w = verticalPositions[i + 1] - x;
-            //        int h = horizontalPositions[j + 1] - y;
-            //        cellROIs.Add(new OpenCvSharp.Rect(x, y, w, h));
-            //    }
-            //}
+            // Save debug overlay
+            await SaveToGalleryAsync(context, overlay, "debug_hough_overlay.png");
 
-            //// --- 7. Draw debug ROIs ---
-            //using var debug = new Mat();
-            //Cv2.CvtColor(rotatedMask, debug, ColorConversionCodes.GRAY2BGR);
-            //foreach (var roi in cellROIs)
-            //    Cv2.Rectangle(debug, roi, Scalar.Red, 2);
+            // DECISION: If ANY good horizontal OR vertical lines exist → SKIP ROTATION
+            bool hasStableOrientation = horizontalDetected.Count > 5 && verticalDetected.Count > 5;
 
-            //await SaveToGalleryAsync(context, debug, "debug_cells_rotated.png");
+            var mask = morph.Clone();
+            if (hasStableOrientation)
+            {
+                int tester = horizontalDetected.Count;
+                int tester2 = verticalDetected.Count;
+                ;
+                // Keep original image — store morph into mask for downstream logic
+                mask = morph.Clone();
+                await SaveToGalleryAsync(context, mask, "debug_rotation_skipped.png");
 
+                // → Continue pipeline using `mask`, later
+            }
+            else
+            {
+                // ------------------- Robust rotation using chosen oblique line -------------------
+                if (obliqueDetected.Count > 0)
+                {
+                    // pick the longest oblique line (already filtered earlier)
+                    var longestLine = obliqueDetected
+                        .OrderByDescending(ln =>
+                        {
+                            double dx0 = ln.P2.X - ln.P1.X;
+                            double dy0 = ln.P2.Y - ln.P1.Y;
+                            return dx0 * dx0 + dy0 * dy0;
+                        })
+                        .First();
+
+                    // compute its angle (degrees)
+                    double dx = longestLine.P2.X - longestLine.P1.X;
+                    double dy = longestLine.P2.Y - longestLine.P1.Y;
+                    double angleDeg = Math.Atan2(dy, dx) * 180.0 / Math.PI; // -180..180
+
+                    // compute new canvas size so we don't crop corners
+                    int w = morph.Width;
+                    int h = morph.Height;
+                    double rad = Math.Abs(angleDeg * Math.PI / 180.0);
+                    double cos = Math.Cos(rad);
+                    double sin = Math.Sin(rad);
+                    int newW = (int)Math.Round(h * sin + w * cos);
+                    int newH = (int)Math.Round(h * cos + w * sin);
+
+                    // rotation matrix about the original center
+                    var center = new Point2f(w / 2f, h / 2f);
+                    var rotMat = Cv2.GetRotationMatrix2D(center, angleDeg, 1.0);
+
+                    // adjust translation so rotated image is centered in new canvas
+                    rotMat.Set(0, 2, rotMat.Get<double>(0, 2) + (newW / 2.0 - center.X));
+                    rotMat.Set(1, 2, rotMat.Get<double>(1, 2) + (newH / 2.0 - center.Y));
+
+                    // warp into the expanded canvas (important: use newW/newH here)
+                    var rotatedMask = new Mat(newH, newW, morph.Type(), Scalar.All(0));
+                    Cv2.WarpAffine(
+                        morph,
+                        rotatedMask,
+                        rotMat,
+                        new OpenCvSharp.Size(newW, newH),
+                        InterpolationFlags.Nearest,
+                        BorderTypes.Constant,
+                        Scalar.All(0)
+                    );
+
+                    // Save rotated mask for debug
+                    await SaveToGalleryAsync(context, rotatedMask, "debug_grid_mask_rotated.png");
+
+                    // Re-run Hough on rotated mask to confirm alignment and draw overlay
+                    var afterLines = Cv2.HoughLinesP(rotatedMask, 1, Math.PI / 180.0, 80, Math.Max(30, rotatedMask.Width / 10), Math.Max(5, rotatedMask.Width / 200)) ?? Array.Empty<LineSegmentPoint>();
+                    using var overlayAfter = new Mat();
+                    Cv2.CvtColor(rotatedMask, overlayAfter, ColorConversionCodes.GRAY2BGR);
+
+                    foreach (var ln in afterLines)
+                    {
+                        double dx2 = ln.P2.X - ln.P1.X;
+                        double dy2 = ln.P2.Y - ln.P1.Y;
+                        double a = Math.Atan2(dy2, dx2) * 180.0 / Math.PI;
+
+                        Scalar color = (Math.Abs(a) < 10) ? new Scalar(255, 0, 0) : (Math.Abs(a) > 80 ? new Scalar(0, 255, 0) : new Scalar(0, 255, 255));
+                        int thickness = Math.Min(6, Math.Max(1, (int)(Math.Sqrt(dx2 * dx2 + dy2 * dy2) / Math.Max(1, rotatedMask.Width / 200.0))));
+                        Cv2.Line(overlayAfter, ln.P1, ln.P2, color, thickness);
+                    }
+
+                    // draw the chosen original line transformed into the rotated canvas (red)
+                    // apply rotMat: [a b c; d e f] * [x;y;1]
+                    double a00 = rotMat.Get<double>(0, 0), a01 = rotMat.Get<double>(0, 1), a02 = rotMat.Get<double>(0, 2);
+                    double a10 = rotMat.Get<double>(1, 0), a11 = rotMat.Get<double>(1, 1), a12 = rotMat.Get<double>(1, 2);
+                    OpenCvSharp.Point rp1 = new OpenCvSharp.Point((int)Math.Round(a00 * longestLine.P1.X + a01 * longestLine.P1.Y + a02), (int)Math.Round(a10 * longestLine.P1.X + a11 * longestLine.P1.Y + a12));
+                    OpenCvSharp.Point rp2 = new OpenCvSharp.Point((int)Math.Round(a00 * longestLine.P2.X + a01 * longestLine.P2.Y + a02), (int)Math.Round(a10 * longestLine.P2.X + a11 * longestLine.P2.Y + a12));
+                    Cv2.Line(overlayAfter, rp1, rp2, new Scalar(0, 0, 255), 3);
+
+                    await SaveToGalleryAsync(context, overlayAfter, "debug_hough_after_rotation.png");
+
+                    // give downstream code the corrected mask
+                    mask = rotatedMask; // use 'mask' variable from here on
+                }
+                else
+                {
+                    // fallback: no oblique lines, continue with original morph
+                    mask = morph.Clone();
+                    await SaveToGalleryAsync(context, mask, "debug_rotation_no_lines.png");
+                }
+            }
+
+
+            // Helper local functions (put these as private methods in your class if the compiler complains)
+            double NormalizeAngleForMean(double ang)
+            {
+                // Map angle into range [-90,90) then shift so mean works around 0; this helps when angles wrap around ±180
+                double a = ang;
+                while (a <= -90) a += 180;
+                while (a > 90) a -= 180;
+                return a;
+            }
+            double NormalizeAngleFromMean(double ang)
+            {
+                double a = ang;
+                while (a <= -180) a += 360;
+                while (a > 180) a -= 360;
+                return a;
+            }
+            //rotate finsihed
+
+            
             // --- 1. Detect line segments on the binary mask ---
             LineSegmentPoint[] lines = Cv2.HoughLinesP(
-                morph,       // binary mask
+                mask,       // binary mask
                 1,           // rho resolution
                 Math.PI / 180, // theta resolution
                 120,         // min votes
@@ -414,15 +358,15 @@ namespace tictactoe.Services
 
             // --- 4. Cluster nearby lines ---
             verticalPositions = ClusterLinesAggressive(verticalPositions, 7, 80);   // tweak tolerance as needed
-            horizontalPositions = ClusterLinesAggressive(horizontalPositions, 7,80);
+            horizontalPositions = ClusterLinesAggressive(horizontalPositions, 7, 80);
 
             // --- 5. Optional: filter out lines near board edges to remove extra X/O artifacts ---
             verticalPositions = verticalPositions
-                .Where(x => x > 5 && x < morph.Width - 5)
+                .Where(x => x > 5 && x < mask.Width - 5)
                 .ToList();
 
             horizontalPositions = horizontalPositions
-                .Where(y => y > 5 && y < morph.Height - 5)
+                .Where(y => y > 5 && y < mask.Height - 5)
                 .ToList();
 
             // --- 6. Generate cell ROIs from intersections ---
@@ -441,7 +385,7 @@ namespace tictactoe.Services
 
             // --- 7. Optional: draw ROIs for debug ---
             using var debug = new Mat();
-            Cv2.CvtColor(morph, debug, ColorConversionCodes.GRAY2BGR);
+            Cv2.CvtColor(mask, debug, ColorConversionCodes.GRAY2BGR);
             foreach (var roi in cellROIs)
             {
                 Cv2.Rectangle(debug, roi, Scalar.Red, 2);
