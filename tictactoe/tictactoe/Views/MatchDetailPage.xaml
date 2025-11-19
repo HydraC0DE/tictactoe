@@ -20,6 +20,7 @@
                 <Grid x:Name="BoardGrid" BackgroundColor="LightGray" />
             </ScrollView>-->
 
+            <Label Text="Final state of the game:"
             <ScrollView Orientation="Both">
                 <Editor x:Name="EmojiBoardLabel"
             IsReadOnly="True"
