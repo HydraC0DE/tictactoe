@@ -1,101 +1,4 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<!--<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="tictactoe.Views.MatchDetailPage"
-             Title="Match Details">
-
-    <VerticalStackLayout Padding="10" Spacing="10">
-
-        <WebView x:Name="MapWebView"
-                 HeightRequest="400" />
-
-        <HorizontalStackLayout Spacing="10" HorizontalOptions="Center">
-            <Button Text="Edit" Clicked="OnEditClicked"/>
-            <Button Text="Delete" Clicked="OnDeleteClicked"/>
-        </HorizontalStackLayout>
-        
-        
-
-        <ScrollView>
-            <StackLayout Padding="12" Spacing="12">
-                <Image x:Name="imgMatch" HeightRequest="300" Aspect="AspectFill" />
-                <Label Text="{Binding Result}" FontAttributes="Bold" />
-                <Label Text="{Binding Date, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" />
-                <Label Text="{Binding Latitude, StringFormat='Lat: {0:F5}'}" />
-                <Label Text="{Binding Longitude, StringFormat='Lon: {0:F5}'}" />
-                <Button Text="Open image" Clicked="OnOpenImageClicked" />
-            </StackLayout>
-        </ScrollView>
-
-
-    </VerticalStackLayout>
-</ContentPage>-->
-
-<!--<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="tictactoe.Views.MatchDetailPage"
-             Title="Match Details">
-
-    <Grid RowDefinitions="2*,3*">
-         Map takes 2/5 of the height 
-        <WebView x:Name="MapWebView" Grid.Row="0" />
-
-         Scrollable content takes 3/5 
-        <ScrollView Grid.Row="1">
-            <VerticalStackLayout Padding="12" Spacing="12">
-                <Image x:Name="imgMatch" HeightRequest="300" Aspect="AspectFit" />
-                <Button Text="Open image" Clicked="OnOpenImageClicked" />
-                <Label Text="{Binding Result}" FontAttributes="Bold" />
-                <Label Text="{Binding Date, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" />
-                <Label Text="{Binding Latitude, StringFormat='Lat: {0:F5}'}" />
-                <Label Text="{Binding Longitude, StringFormat='Lon: {0:F5}'}" />
-
-                <HorizontalStackLayout Spacing="10" HorizontalOptions="Center">
-                    <Button Text="Edit" Clicked="OnEditClicked"/>
-                    <Button Text="Delete" Clicked="OnDeleteClicked"/>
-                </HorizontalStackLayout>
-            </VerticalStackLayout>
-        </ScrollView>
-    </Grid>
-</ContentPage>-->
-
-<!--<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="tictactoe.Views.MatchDetailPage"
-             Title="Match Details">
-
-    <Grid RowDefinitions="2*,3*">
-        --><!-- Map --><!--
-        <WebView x:Name="MapWebView" Grid.Row="0" />
-
-        --><!-- Scrollable content --><!--
-        <ScrollView Grid.Row="1">
-            <VerticalStackLayout Padding="12" Spacing="12">
-
-                --><!-- Image of the match --><!--
-                <Image x:Name="imgMatch" HeightRequest="200" Aspect="AspectFit" />
-
-                --><!-- Game board container --><!--
-                <Grid x:Name="BoardGrid" ColumnSpacing="1" RowSpacing="1" BackgroundColor="LightGray" />
-
-                --><!-- Game info --><!--
-                <Label Text="{Binding Result}" FontAttributes="Bold" />
-                <Label Text="{Binding Date, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" />
-                <Label Text="{Binding Latitude, StringFormat='Lat: {0:F5}'}" />
-                <Label Text="{Binding Longitude, StringFormat='Lon: {0:F5}'}" />
-
-                --><!-- Edit/Delete buttons --><!--
-                <HorizontalStackLayout Spacing="10" HorizontalOptions="Center">
-                    <Button Text="Edit" Clicked="OnEditClicked"/>
-                    <Button Text="Delete" Clicked="OnDeleteClicked"/>
-                </HorizontalStackLayout>
-
-            </VerticalStackLayout>
-        </ScrollView>
-    </Grid>
-</ContentPage>-->
-
-
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="tictactoe.Views.MatchDetailPage"
@@ -112,10 +15,21 @@
                 <Image x:Name="imgMatch" HeightRequest="200" Aspect="AspectFit" />
 
             <!-- Game board -->
-            <Label Text="Final state of the game"/>
+            <!--<Label Text="Final state of the game"/>
             <ScrollView Orientation="Both">
                 <Grid x:Name="BoardGrid" BackgroundColor="LightGray" />
+            </ScrollView>-->
+
+            <ScrollView Orientation="Both">
+                <Editor x:Name="EmojiBoardLabel"
+            IsReadOnly="True"
+            FontFamily="monospace"
+            FontSize="20"
+            AutoSize="TextChanges" />
             </ScrollView>
+
+
+
 
             <!-- Game info -->
             <Label Text="{Binding Result, StringFormat='{0} has won the match!'}" FontAttributes="Bold" />
@@ -128,6 +42,10 @@
                 <Button Text="Edit" Clicked="OnEditClicked"/>
                 <Button Text="Delete" Clicked="OnDeleteClicked"/>
             </HorizontalStackLayout>
+
+
+            <Button Text="Share" Clicked="OnShareClicked" />
+
 
         </VerticalStackLayout>
     </ScrollView>
