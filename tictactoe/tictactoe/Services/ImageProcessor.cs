@@ -1,5 +1,6 @@
 ﻿using Android.Content;
 using Android.Provider;
+using Microsoft.Maui.Controls.PlatformConfiguration;
 using Microsoft.Maui.Controls.Shapes;
 using OpenCvSharp;
 using OpenCvSharp.XPhoto;
@@ -79,6 +80,23 @@ namespace tictactoe.Services
 
             return merged;
         }
+        private double ComputeAverageSpacing(List<int> positions)
+        {
+            if (positions.Count < 2)
+                return 0;
+
+            positions.Sort();
+            double sum = 0;
+            int count = 0;
+
+            for (int i = 1; i < positions.Count; i++)
+            {
+                sum += (positions[i] - positions[i - 1]);
+                count++;
+            }
+
+            return sum / count;
+        }
 
         public async Task<Game> ProcessImageAsync(string boardImagePath)
         {
@@ -115,15 +133,29 @@ namespace tictactoe.Services
             await SaveToGalleryAsync(context, morph, "debug_grid_mask.png");
 
             //rotate here
+            // --- Morphological opening to clean up noise ---
+            using var openKernel = Cv2.GetStructuringElement(MorphShapes.Rect, new OpenCvSharp.Size(5, 5));
+            using var opened = new Mat();
+
+            // Try 2–3 iterations
+            Cv2.MorphologyEx(morph, opened, MorphTypes.Open, openKernel, iterations: 2);
+
+
+            // Debug save
+            await SaveToGalleryAsync(context, opened, "debug_opening.png");
+
+            // Use 'opened' instead of 'morph' from this point forward
+            var maskForRotation = opened.Clone();
+
 
             // 1) Hough detect (use the morph mask you already computed)
             LineSegmentPoint[] hough = Cv2.HoughLinesP(
-                morph,          // binary mask
+                opened,          // binary mask
                 1,              // rho
                 Math.PI / 180,  // theta
                 80,             // threshold (votes) - tuned to pick strong lines
-                Math.Max(30, morph.Width / 10), // minLineLength (tweakable)
-                Math.Max(5, morph.Width / 200)   // maxLineGap
+                Math.Max(30, opened.Width / 10), // minLineLength (tweakable)
+                Math.Max(5, opened.Width / 200)   // maxLineGap
             );
 
             // debug: visualize Hough lines and compute simple stats
@@ -131,7 +163,8 @@ namespace tictactoe.Services
 
             // Create color overlay for visualization
             using var overlay = new Mat();
-            Cv2.CvtColor(morph, overlay, ColorConversionCodes.GRAY2BGR);
+            Cv2.CvtColor(opened, overlay, ColorConversionCodes.GRAY2BGR);
+
 
             // Collect stats
             var angles = new List<double>();
@@ -149,12 +182,12 @@ namespace tictactoe.Services
 
                 Scalar color;
 
-                if (Math.Abs(angleDeg) > 80) // vertical-ish
+                if (Math.Abs(angleDeg) > 85) // vertical-ish
                 {
                     verticalDetected.Add(ln);
                     color = new Scalar(0, 255, 0);  // green
                 }
-                else if (Math.Abs(angleDeg) < 10) // horizontal-ish
+                else if (Math.Abs(angleDeg) < 5) // horizontal-ish
                 {
                     horizontalDetected.Add(ln);
                     color = new Scalar(255, 0, 0); // blue
@@ -165,7 +198,7 @@ namespace tictactoe.Services
                     color = new Scalar(0, 255, 255); // yellow
                 }
 
-                int thickness = Math.Min(6, Math.Max(1, (int)(length / Math.Max(1, morph.Width / 200.0))));
+                int thickness = Math.Min(6, Math.Max(1, (int)(length / Math.Max(1, opened.Width / 200.0))));
                 Cv2.Line(overlay, ln.P1, ln.P2, color, thickness);
             }
 
@@ -200,16 +233,16 @@ namespace tictactoe.Services
             await SaveToGalleryAsync(context, overlay, "debug_hough_overlay.png");
 
             // DECISION: If ANY good horizontal OR vertical lines exist → SKIP ROTATION
-            bool hasStableOrientation = horizontalDetected.Count > 5 && verticalDetected.Count > 5;
+            bool hasStableOrientation = horizontalDetected.Count > 10 && verticalDetected.Count > 10;
 
-            var mask = morph.Clone();
+            var mask = opened.Clone();
             if (hasStableOrientation)
             {
                 int tester = horizontalDetected.Count;
                 int tester2 = verticalDetected.Count;
                 ;
                 // Keep original image — store morph into mask for downstream logic
-                mask = morph.Clone();
+                mask = opened.Clone();
                 await SaveToGalleryAsync(context, mask, "debug_rotation_skipped.png");
 
                 // → Continue pipeline using `mask`, later
@@ -235,8 +268,8 @@ namespace tictactoe.Services
                     double angleDeg = Math.Atan2(dy, dx) * 180.0 / Math.PI; // -180..180
 
                     // compute new canvas size so we don't crop corners
-                    int w = morph.Width;
-                    int h = morph.Height;
+                    int w = opened.Width;
+                    int h = opened.Height;
                     double rad = Math.Abs(angleDeg * Math.PI / 180.0);
                     double cos = Math.Cos(rad);
                     double sin = Math.Sin(rad);
@@ -252,9 +285,9 @@ namespace tictactoe.Services
                     rotMat.Set(1, 2, rotMat.Get<double>(1, 2) + (newH / 2.0 - center.Y));
 
                     // warp into the expanded canvas (important: use newW/newH here)
-                    var rotatedMask = new Mat(newH, newW, morph.Type(), Scalar.All(0));
+                    var rotatedMask = new Mat(newH, newW, opened.Type(), Scalar.All(0));
                     Cv2.WarpAffine(
-                        morph,
+                        opened,
                         rotatedMask,
                         rotMat,
                         new OpenCvSharp.Size(newW, newH),
@@ -298,7 +331,7 @@ namespace tictactoe.Services
                 else
                 {
                     // fallback: no oblique lines, continue with original morph
-                    mask = morph.Clone();
+                    mask = opened.Clone();
                     await SaveToGalleryAsync(context, mask, "debug_rotation_no_lines.png");
                 }
             }
@@ -322,7 +355,7 @@ namespace tictactoe.Services
             }
             //rotate finsihed
 
-            
+
             // --- 1. Detect line segments on the binary mask ---
             LineSegmentPoint[] lines = Cv2.HoughLinesP(
                 mask,       // binary mask
@@ -357,8 +390,23 @@ namespace tictactoe.Services
                 .ToList();
 
             // --- 4. Cluster nearby lines ---
-            verticalPositions = ClusterLinesAggressive(verticalPositions, 7, 80);   // tweak tolerance as needed
-            horizontalPositions = ClusterLinesAggressive(horizontalPositions, 7, 80);
+            double avgV = ComputeAverageSpacing(verticalPositions);
+            double avgH = ComputeAverageSpacing(horizontalPositions);
+
+            // fallback if average is too small (bad detection)
+            if (avgV < 5) avgV = 25;
+            if (avgH < 5) avgH = 25;
+
+            // dynamic tolerance & mergeTolerance
+            int tolV = (int)(avgV * 0.75);         // ~40% of expected tile width
+            int mergeV = (int)(avgV * 5);       // tiles closer than ~1.2× avg should merge
+
+            int tolH = (int)(avgH * 0.60);
+            int mergeH = (int)(avgH * 5);
+
+            verticalPositions = ClusterLinesAggressive(verticalPositions, tolV, mergeV);
+            horizontalPositions = ClusterLinesAggressive(horizontalPositions, tolH, mergeH);
+
 
             // --- 5. Optional: filter out lines near board edges to remove extra X/O artifacts ---
             verticalPositions = verticalPositions
@@ -392,14 +440,114 @@ namespace tictactoe.Services
             }
             await SaveToGalleryAsync(context, debug, "debug_cells_gomoku.png");
 
-            //// --- 8. Return or process the cell ROIs ---
-            //return new Game
-            //{
-            //    Cells = cellROIs.Select(r => new GameCell { Rect = r }).ToList()
-            //};
+            // --- 8. Fill Game.Board using contour solidity analysis ---
 
 
-            return new Game();
+
+            //// INPUTS:
+            //// - mask: thresholded binary image (Mat)
+            //// - cellROIs: list of Rect for each grid cell (15×15 total)
+            //// - context: Android context for SaveToGalleryAsync
+
+            var roiScores = new List<(OpenCvSharp.Rect roi, double score)>();
+
+            // ---------------------------------------------------------------
+            // Step 1 — Compute whiteness score for every ROI
+            // ---------------------------------------------------------------
+            foreach (var roi in cellROIs)
+            {
+                int x = Math.Max(0, roi.X);
+                int y = Math.Max(0, roi.Y);
+                int w = Math.Min(mask.Width - x, roi.Width);
+                int h = Math.Min(mask.Height - y, roi.Height);
+
+                if (w <= 0 || h <= 0) continue;
+
+                var roiMat = new Mat(mask, new OpenCvSharp.Rect(x, y, w, h));
+                double nonZeroRatio = Cv2.CountNonZero(roiMat) / (double)(w * h);
+
+                roiScores.Add((roi, nonZeroRatio));
+            }
+
+            // stop if empty
+            if (roiScores.Count == 0)
+                return new Game();
+
+            // ---------------------------------------------------------------
+            // Step 2 — pick the anchor ROI (highest whiteness)
+            // ---------------------------------------------------------------
+            var anchor = roiScores.OrderByDescending(s => s.score).First();
+            double anchorScore = anchor.score;
+
+            // ---------------------------------------------------------------
+            // Step 3 — find adjacent neighbors of the anchor
+            // ---------------------------------------------------------------
+            int total = roiScores.Count;
+            int side = (int)Math.Sqrt(total); // 15 for 15x15
+
+            int anchorIndex = roiScores.IndexOf(anchor);
+            int ar = anchorIndex / side;
+            int ac = anchorIndex % side;
+
+            bool IsNeighbor(int r, int c, int nr, int nc)
+            {
+                if (nr < 0 || nr >= side || nc < 0 || nc >= side)
+                    return false;
+
+                // 4-directional adjacency
+                return Math.Abs(r - nr) + Math.Abs(c - nc) == 1;
+            }
+
+            var neighborScores = new List<double>();
+
+            for (int i = 0; i < roiScores.Count; i++)
+            {
+                int r = i / side;
+                int c = i % side;
+
+                if (IsNeighbor(ar, ac, r, c))
+                    neighborScores.Add(roiScores[i].score);
+            }
+
+            double neighborAvg = neighborScores.Count > 0 ? neighborScores.Average() : anchorScore;
+
+            // ---------------------------------------------------------------
+            // Step 4 — compute weighted adaptive threshold
+            // ---------------------------------------------------------------
+            double adaptiveThreshold =
+                (anchorScore * 0.40) +
+                (neighborAvg * 0.60);
+
+            // ---------------------------------------------------------------
+            // Step 5 — return only ROIs above threshold
+            // ---------------------------------------------------------------
+            var usefulROIs = new List<Mat>();
+
+            foreach (var (roi, score) in roiScores)
+            {
+                if (score >= adaptiveThreshold)
+                {
+                    var roiMat = new Mat(mask, roi);
+                    usefulROIs.Add(roiMat);
+
+                    await SaveToGalleryAsync(context, roiMat, $"roi_useful_{roi.X}_{roi.Y}.png");
+                }
+            }
+
+            var distinctX = usefulROIs.Select(r => r.Cols).Distinct().ToList();
+            var distinctY = usefulROIs.Select(r => r.Rows).Distinct().ToList();
+
+            int cols = distinctX.Count;
+            int rows = distinctY.Count;
+
+            int gridSize = Math.Max(cols, rows); //so the box is gridSize*gridSize, find one good point then proceed, probaby one of the maximums or minimums in the way that is bigger
+            //identify which one is an X or O, could happen before this
+            ;
+
+
+            var game = new Game();
+            return game;
+
         }
 
     }
