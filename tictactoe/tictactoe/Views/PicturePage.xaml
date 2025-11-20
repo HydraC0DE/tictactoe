@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+<!--<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="tictactoe.Views.PicturePage"
              Title="Take a Picture">
@@ -22,6 +22,47 @@
                 Text="Go to Play"
                 Clicked="OnGoToPlayClicked"
                 IsVisible="False" />
-        <!-- hidden until photo taken -->
+        --><!-- hidden until photo taken --><!--
     </VerticalStackLayout>
+</ContentPage>-->
+
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="tictactoe.Views.PicturePage"
+             Title="Take a Picture">
+
+    <Grid>
+        <!-- Main content -->
+        <VerticalStackLayout Padding="20" Spacing="20" HorizontalOptions="Center" VerticalOptions="Start">
+            <Image x:Name="imgPreview"
+                   WidthRequest="200"
+                   HeightRequest="200"
+                   Aspect="AspectFill"
+                   BackgroundColor="#222" />
+
+            <ImageButton x:Name="btnTakePhoto"
+                         Source="camera.png"
+                         WidthRequest="100"
+                         HeightRequest="100"
+                         Clicked="OnCameraClicked"
+                         HorizontalOptions="Center" />
+
+            <Button x:Name="btnGoToPlay"
+                    Text="Go to Play"
+                    Clicked="OnGoToPlayClicked"
+                    IsVisible="False" />
+        </VerticalStackLayout>
+
+        <!-- Processing overlay -->
+        <Grid x:Name="processingOverlay" BackgroundColor="#88000000" IsVisible="False">
+            <Label Text="Processing image and computing AI move..."
+                   TextColor="White"
+                   HorizontalOptions="Center"
+                   VerticalOptions="Center"
+                   FontSize="18"
+                   HorizontalTextAlignment="Center"
+                   VerticalTextAlignment="Center" />
+        </Grid>
+    </Grid>
 </ContentPage>
+

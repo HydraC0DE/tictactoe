@@ -151,32 +151,6 @@ public partial class PlayPage : ContentPage
     }
     bool CanPlayerMove(string player) => _game.NextMove == player;
 
-    // Update only a single cell
-    //private async void UpdateCell(int row, int col)
-    //{
-    //    var btn = _boardButtons[row, col];
-    //    btn.Text = _game.Board[row, col] == 1 ? "X" :
-    //               _game.Board[row, col] == 2 ? "O" : "";
-    //    if (_game.IsTerminal)
-    //    {
-    //        // Disable the entire board
-    //        foreach (var b in _boardButtons)
-    //            b.IsEnabled = false;
-
-    //        // Show result
-    //        string winner = _game.Result; // "X", "O", or "Draw"
-    //        string message = winner == "Draw"
-    //            ? "The game ended in a draw. Do you want to save the match?"
-    //            : $"{winner} won! Do you want to save the match?";
-
-    //        bool save = await DisplayAlert("Game Over", message, "Yes", "No");
-
-    //        if (save)
-    //        {
-    //            await SaveMatchAsync();
-    //        }
-    //    }
-    //}
 
     private async void UpdateCell(int row, int col)
     {
@@ -187,7 +161,7 @@ public partial class PlayPage : ContentPage
         
         if (_game.IsTerminal)
         {
-            ;
+            
             btnAIMove.IsEnabled = false;
             // Disable the entire board
             foreach (var b in _boardButtons)
@@ -243,23 +217,6 @@ public partial class PlayPage : ContentPage
         }
     }
 
-
-    //private void OnCellClicked(int row, int col)
-    //    {
-    //        if (_game.Board[row, col] == 0)
-    //        {
-    //            _game.Board[row, col] = 1; // Player move
-    //            UpdateCell(row, col);      // Only update this button
-
-    //            foreach (var btn in _boardButtons) //exploded last time
-    //                btn.IsEnabled = false;
-
-
-    //            btnAIMove.IsEnabled = true;
-    //        }
-
-    //    }
-
     private void OnCellClicked(int row, int col)
     {
         // ensure it's player's turn and spot is legal
@@ -277,19 +234,6 @@ public partial class PlayPage : ContentPage
         }
     }
 
-
-    //private async void OnGetAIMoveClicked(object sender, EventArgs e)
-    //{
-    //    btnAIMove.IsEnabled = false;
-
-    //    var aiMove = await _solver.GetBestMoveAsync(_game);
-
-    //    _game.MakeMove(aiMove.row, aiMove.col);
-    //    _game.Board[aiMove.row, aiMove.col] = 2;
-    //    UpdateCell(aiMove.row, aiMove.col); // Only update AI move
-    //    EnableCorrectOnes();
-
-    //}
 
     private async void OnGetAIMoveClicked(object sender, EventArgs e)
     {

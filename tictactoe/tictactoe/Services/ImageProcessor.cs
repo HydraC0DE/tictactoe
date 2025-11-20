@@ -240,7 +240,7 @@ namespace tictactoe.Services
             {
                 int tester = horizontalDetected.Count;
                 int tester2 = verticalDetected.Count;
-                ;
+                
                 // Keep original image — store morph into mask for downstream logic
                 mask = opened.Clone();
                 await SaveToGalleryAsync(context, mask, "debug_rotation_skipped.png");
@@ -453,6 +453,7 @@ namespace tictactoe.Services
 
             // ---------------------------------------------------------------
             // Step 1 — Compute whiteness score for every ROI
+            //           (use only the inner 80% area for scoring)
             // ---------------------------------------------------------------
             foreach (var roi in cellROIs)
             {
@@ -463,11 +464,33 @@ namespace tictactoe.Services
 
                 if (w <= 0 || h <= 0) continue;
 
-                var roiMat = new Mat(mask, new OpenCvSharp.Rect(x, y, w, h));
-                double nonZeroRatio = Cv2.CountNonZero(roiMat) / (double)(w * h);
+                // full ROI (saved later)
+                var fullMat = new Mat(mask, new OpenCvSharp.Rect(x, y, w, h));
+
+                int cropW = w; // 100% width
+                int cropH = h; // 100% height
+                // ---- NEW: compute score from INNER AREA ONLY ----
+                if (!hasStableOrientation)
+                {
+                    cropW = (int)(w * 0.90); // 80% width
+                    cropH = (int)(h * 0.90); // 80% height
+                }
+
+                
+
+                int offsetX = (w - cropW) / 2;
+                int offsetY = (h - cropH) / 2;
+
+                // ensure valid crop
+                if (cropW <= 0 || cropH <= 0) continue;
+
+                var innerMat = new Mat(fullMat, new OpenCvSharp.Rect(offsetX, offsetY, cropW, cropH));
+
+                double nonZeroRatio = Cv2.CountNonZero(innerMat) / (double)(cropW * cropH);
 
                 roiScores.Add((roi, nonZeroRatio));
             }
+
 
             // stop if empty
             if (roiScores.Count == 0)
@@ -515,40 +538,393 @@ namespace tictactoe.Services
             // Step 4 — compute weighted adaptive threshold
             // ---------------------------------------------------------------
             double adaptiveThreshold =
-                (anchorScore * 0.40) +
-                (neighborAvg * 0.60);
+                (anchorScore * 0.50) +
+                (neighborAvg * 0.30);
 
-            // ---------------------------------------------------------------
-            // Step 5 — return only ROIs above threshold
-            // ---------------------------------------------------------------
-            var usefulROIs = new List<Mat>();
+            //int gridSize = Math.Max(cols, rows); //so the box is gridSize*gridSize, find one good point then proceed, probaby one of the maximums or minimums in the way that is bigger
+            //identify which one is an X or O, could happen before this
+            var useful = new List<(OpenCvSharp.Rect rect, int index, Mat img)>();
 
-            foreach (var (roi, score) in roiScores)
+            for (int i = 0; i < roiScores.Count; i++)
             {
+                var (roi, score) = roiScores[i];
+
                 if (score >= adaptiveThreshold)
                 {
                     var roiMat = new Mat(mask, roi);
-                    usefulROIs.Add(roiMat);
+                    useful.Add((roi, i, roiMat));
 
                     await SaveToGalleryAsync(context, roiMat, $"roi_useful_{roi.X}_{roi.Y}.png");
                 }
             }
+            // build an intermediate list with ROI center coordinates
+            var usefulMatsList = useful
+                .Select(u => new
+                {
+                    Rect = u.rect,
+                    Index = u.index,
+                    Img = u.img,
+                    Cx = u.rect.X + u.rect.Width / 2.0,
+                    Cy = u.rect.Y + u.rect.Height / 2.0
+                })
+                .ToList();
 
-            var distinctX = usefulROIs.Select(r => r.Cols).Distinct().ToList();
-            var distinctY = usefulROIs.Select(r => r.Rows).Distinct().ToList();
+            // get sorted distinct column centers (X) and row centers (Y)
+            var distinctColCenters = usefulMatsList.Select(t => t.Cx).Distinct().OrderBy(x => x).ToList();
+            var distinctRowCenters = usefulMatsList.Select(t => t.Cy).Distinct().OrderBy(y => y).ToList();
 
-            int cols = distinctX.Count;
-            int rows = distinctY.Count;
+            // If detection collapsed (e.g. only one distinct), try to recover by grouping by rounding
+            if (distinctColCenters.Count == 0 || distinctRowCenters.Count == 0)
+            {
+                // nothing useful found
+                return new Game();
+            }
 
-            int gridSize = Math.Max(cols, rows); //so the box is gridSize*gridSize, find one good point then proceed, probaby one of the maximums or minimums in the way that is bigger
-            //identify which one is an X or O, could happen before this
-            ;
+            int usedColsCount = distinctColCenters.Count;
+            int usedRowsCount = distinctRowCenters.Count;
+
+            // helper: find index of closest center
+            int IndexOfClosest(List<double> centers, double value)
+            {
+                int best = 0;
+                double bestDist = Math.Abs(centers[0] - value);
+                for (int i = 1; i < centers.Count; i++)
+                {
+                    double d = Math.Abs(centers[i] - value);
+                    if (d < bestDist)
+                    {
+                        bestDist = d;
+                        best = i;
+                    }
+                }
+                return best;
+            }
+
+            // create grid and place Mats
+            var grid = new Mat[usedRowsCount, usedColsCount];
+
+            foreach (var it in usefulMatsList)
+            {
+                int colIdx = IndexOfClosest(distinctColCenters, it.Cx);
+                int rowIdx = IndexOfClosest(distinctRowCenters, it.Cy);
+
+                // place ROI mat into reconstructed grid cell
+                grid[rowIdx, colIdx] = it.Img;
+            }
+
+            // create finalBoard placeholder (string) with same dims
+            int[,] finalBoard = new int[usedRowsCount, usedColsCount];
+
+            // If you want to save debug images of the reconstructed grid cells:
+            for (int r = 0; r < usedRowsCount; r++)
+            {
+                for (int c = 0; c < usedColsCount; c++)
+                {
+                    var m = grid[r, c];
+                    if (m != null)
+                    {
+                        // save with row/col coordinates for debugging
+                        //await SaveToGalleryAsync(context, m, $"recon_cell_r{r}_c{c}.png");
+                    }
+                }
+            }
+
+            // now `grid` holds the placed ROI Mats and `finalBoard` is ready for later filling
+            // (you can run your X/O classification over grid[r,c] and fill finalBoard accordingly)
+
+            // ------------------------------------------------------------
+            // Step X — classify each ROI as "X" or "O"
+            // ------------------------------------------------------------
+            for (int r = 0; r < usedRowsCount; r++)
+            {
+                for (int c = 0; c < usedColsCount; c++)
+                {
+                    var cell = grid[r, c];
+                    if (cell == null)
+                    {
+                        finalBoard[r, c] = 0;   // empty slot
+                        continue;
+                    }
+
+                    int symbol = ClassifySymbol(cell);
+                    finalBoard[r, c] = symbol;
+
+                }
+            }
+            
 
 
-            var game = new Game();
-            return game;
+            
+            //string resultToPass = "Not finished";
+            //string nextMoveToPass = "";
+            //int[,] boardToPass = new int[15, 15];
+            //boardToPass[7, 7] = 1; //place initial X
+            ////find one X in finalBoard, that goes to boardToPass[7,7]
+            ////fill the rest
+            ////if X or O has 5 in any way out of the 8, parse the correct result
+            ////if X>O, its Os turn, else its Xs turn
+
+            //var game = new Game
+            //{
+            //    Board = finalBoard,
+            //    Result = resultToPass,
+            //    NextMove = nextMoveToPass
+            //};
+
+            //return game;
+
+            string resultToPass = "Not finished";
+            string nextMoveToPass = "";
+
+            // finalBoard is a compact board: rows × cols based on detected grid
+            int rows = finalBoard.GetLength(0);
+            int cols = finalBoard.GetLength(1);
+
+            // Create full 15×15 output board
+            int[,] boardToPass = new int[15, 15];
+
+            // --------------------------------------------------------
+            // STEP 1 — find one X in the detected board and center it
+            // --------------------------------------------------------
+            (int r, int c)? firstX = null;
+
+            for (int r0 = 0; r0 < rows; r0++)
+            {
+                for (int c0 = 0; c0 < cols; c0++)
+                {
+                    if (finalBoard[r0, c0] == 1)   // X found
+                    {
+                        firstX = (r0, c0);
+                        break;
+                    }
+                }
+                if (firstX != null) break;
+            }
+
+            // fallback: if there is NO X at all, just anchor to first non-empty
+            if (firstX == null)
+            {
+                for (int r0 = 0; r0 < rows; r0++)
+                {
+                    for (int c0 = 0; c0 < cols; c0++)
+                    {
+                        if (finalBoard[r0, c0] != 0)
+                        {
+                            firstX = (r0, c0);
+                            break;
+                        }
+                    }
+                    if (firstX != null) break;
+                }
+            }
+
+            // If still no symbol at all → empty game
+            if (firstX == null)
+            {
+                var emptyGame = new Game
+                {
+                    Board = boardToPass,
+                    Result = "Not finished",
+                    NextMove = "X"
+                };
+                return emptyGame;
+            }
+
+            (int fx, int fy) = firstX.Value;
+
+            // target center of 15×15 grid
+            int center2 = 7;   // boardToPass[7,7] is middle
+
+            // how much we need to shift the detected board so fx,fy → 7,7
+            int shiftR = center2 - fx;
+            int shiftC = center2 - fy;
+
+            // --------------------------------------------------------
+            // STEP 2 — copy finalBoard into boardToPass with centering
+            // --------------------------------------------------------
+            for (int r0 = 0; r0 < rows; r0++)
+            {
+                for (int c0 = 0; c0 < cols; c0++)
+                {
+                    int newR = r0 + shiftR;
+                    int newC = c0 + shiftC;
+
+                    if (newR >= 0 && newR < 15 && newC >= 0 && newC < 15)
+                        boardToPass[newR, newC] = finalBoard[r0, c0];
+                }
+            }
+
+            // --------------------------------------------------------
+            // STEP 3 — determine winner (any 5 in a row)
+            // --------------------------------------------------------
+            bool CheckFive(int player)
+            {
+                for (int r = 0; r < 15; r++)
+                {
+                    for (int c = 0; c < 15; c++)
+                    {
+                        if (boardToPass[r, c] != player) continue;
+
+                        // right
+                        if (c <= 15 - 5 &&
+                            Enumerable.Range(0, 5).All(i => boardToPass[r, c + i] == player))
+                            return true;
+
+                        // down
+                        if (r <= 15 - 5 &&
+                            Enumerable.Range(0, 5).All(i => boardToPass[r + i, c] == player))
+                            return true;
+
+                        // diag ↘
+                        if (r <= 15 - 5 && c <= 15 - 5 &&
+                            Enumerable.Range(0, 5).All(i => boardToPass[r + i, c + i] == player))
+                            return true;
+
+                        // diag ↗
+                        if (r >= 4 && c <= 15 - 5 &&
+                            Enumerable.Range(0, 5).All(i => boardToPass[r - i, c + i] == player))
+                            return true;
+                    }
+                }
+                return false;
+            }
+
+            bool xWin = CheckFive(1);
+            bool oWin = CheckFive(2);
+
+            // --------------------------------------------------------
+            // STEP 4 — assign result
+            // --------------------------------------------------------
+            if (xWin && !oWin)
+                resultToPass = "X wins";
+            else if (oWin && !xWin)
+                resultToPass = "O wins";
+            else if (xWin && oWin)
+                resultToPass = "Invalid board";
+            else
+                resultToPass = "Not finished";
+
+            // --------------------------------------------------------
+            // STEP 5 — determine whose turn it is
+            // --------------------------------------------------------
+            int countX = 0, countO = 0;
+            foreach (int v in boardToPass)
+            {
+                if (v == 1) countX++;
+                if (v == 2) countO++;
+            }
+
+            if (!xWin && !oWin)
+            {
+                nextMoveToPass = countX > countO ? "O" : "X";
+            }
+            else
+            {
+                nextMoveToPass = "-"; // game over
+            }
+
+            // --------------------------------------------------------
+            // FINAL OBJECT
+            // --------------------------------------------------------
+            var game = new Game
+            {
+                Board = boardToPass,
+                Result = resultToPass,
+                NextMove = nextMoveToPass
+
+
+            };
+            
+            try
+            {
+                return game;
+            }
+            catch (Exception e)
+            {
+                ;
+                throw;
+            }
+            
+
 
         }
+        int ClassifySymbol(Mat roi)
+        {
+            // Resize to 50×50 for stable classification
+            Mat resized = new Mat();
+            Cv2.Resize(roi, resized, new OpenCvSharp.Size(50, 50));
+
+            int rows = resized.Rows;
+            int cols = resized.Cols;
+
+            // ---- compute inner 90% bounds ----
+            int marginR = (int)(rows * 0.05); // remove 5% top + 5% bottom
+            int marginC = (int)(cols * 0.05); // remove 5% left + 5% right
+
+            int r0 = marginR;
+            int r1 = rows - marginR;
+            int c0 = marginC;
+            int c1 = cols - marginC;
+
+            // horizontal & vertical stroke sums inside inner 90%
+            double[] h = new double[rows];
+            double[] v = new double[cols];
+
+            for (int r = r0; r < r1; r++)
+            {
+                for (int c = c0; c < c1; c++)
+                {
+                    if (resized.At<byte>(r, c) > 0)
+                    {
+                        h[r]++;
+                        v[c]++;
+                    }
+                }
+            }
+
+            double hMax = h.Max();
+            double vMax = v.Max();
+
+            // ---- diagonal scan also only inside the same inner 90% ----
+            double diag1 = 0;
+            double diag2 = 0;
+
+            for (int i = r0; i < r1; i++)
+            {
+                int c_main = i; // main diagonal
+                if (c_main >= c0 && c_main < c1)
+                {
+                    if (resized.At<byte>(i, c_main) > 0)
+                        diag1++;
+                }
+
+                int c_anti = (cols - 1 - i); // anti-diagonal
+                if (c_anti >= c0 && c_anti < c1)
+                {
+                    if (resized.At<byte>(i, c_anti) > 0)
+                        diag2++;
+                }
+            }
+
+            double diagStrength = Math.Max(diag1, diag2);
+
+            // Use total white from original FULL roi (not resized inner region)
+            double white = Cv2.CountNonZero(roi);
+
+            double hvPeak = (hMax + vMax) / 2.0; // strong for O
+            double diag = diagStrength;          // strong for X
+
+            double hvThreshold = 16;  // lower than 18
+            double diagThreshold = 12; // increase max diag to still count as O
+
+            if (hvPeak > hvThreshold && diag < diagThreshold && white > 120)
+                return 2; // O
+            else
+                return 1; // X
+        }
+
+ 
+
 
     }
 

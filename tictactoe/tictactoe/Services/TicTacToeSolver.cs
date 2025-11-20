@@ -390,7 +390,7 @@ namespace tictactoe.Services
                 var winMove = FindImmediateWin(game);
                 if (winMove.HasValue)
                 {
-                    ;
+                    
                     return winMove.Value;
                 }
             }
