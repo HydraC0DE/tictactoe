@@ -6,11 +6,12 @@ using System.Threading.Tasks;
 
 namespace tictactoe.Models
 {
+    using CommunityToolkit.Mvvm.ComponentModel;
     using System;
     using System.Collections.Generic;
     using System.Text.Json.Serialization;
 
-    public class Game
+    public class Game : ObservableObject
     {
         [JsonIgnore]
         public const int SIZE = 15;

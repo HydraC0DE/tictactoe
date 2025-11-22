@@ -1,54 +1,48 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="tictactoe.Views.MatchDetailPage"
-             Title="Match Details">
+<ContentPage 
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:viewmodels="clr-namespace:tictactoe.ViewModels"
+    x:Class="tictactoe.Views.MatchDetailPage"
+    Title="Match Details">
 
     <ScrollView>
         <VerticalStackLayout Padding="12" Spacing="12">
 
-            <!-- Map -->
-            <WebView x:Name="MapWebView" HeightRequest="300" />
+            <WebView HeightRequest="300">
+                <WebView.Source>
+                    <HtmlWebViewSource Html="{Binding MapHtml}" />
+                </WebView.Source>
+            </WebView>
 
-            <!-- Match image -->
             <Label Text="Original picture of the game:" HorizontalOptions="Center"/>
-                <Image x:Name="imgMatch" HeightRequest="200" Aspect="AspectFit" />
+            <Image Source="{Binding ImagePath}" HeightRequest="200" Aspect="AspectFit"/>
 
-            <!-- Game board -->
-            <!--<Label Text="Final state of the game"/>
-            <ScrollView Orientation="Both">
-                <Grid x:Name="BoardGrid" BackgroundColor="LightGray" />
-            </ScrollView>-->
-
-            <Label Text="Final state of the game:" HorizontalOptions="Center"></Label>
+            <Label Text="Final state of the game:" HorizontalOptions="Center"/>
             <ScrollView Orientation="Both" HorizontalOptions="Center">
-                <Editor x:Name="EmojiBoardLabel"
-            IsReadOnly="True"
-            FontFamily="monospace"
-            FontSize="20"
-            AutoSize="TextChanges" />
+                <Editor
+                    Text="{Binding EmojiBoard}"
+                    IsReadOnly="True"
+                    FontFamily="monospace"
+                    FontSize="20"
+                    AutoSize="TextChanges"/>
             </ScrollView>
 
+            <Label x:Name="ResultLabel" Text="{Binding ResultDisplay}" FontAttributes="Bold" HorizontalOptions="Center" />
 
 
 
-            <!-- Game info -->
-            <Label Text="{Binding Result, StringFormat='{0} has won the match!'}" FontAttributes="Bold" HorizontalOptions="Center" />
-            <Label Text="{Binding Date, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" />
-            <Label Text="{Binding Latitude, StringFormat='Lat: {0:F5}'}" />
-            <Label Text="{Binding Longitude, StringFormat='Lon: {0:F5}'}" />
+            <Label Text="{Binding Match.Date, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"/>
+            <Label Text="{Binding Match.Latitude, StringFormat='Lat: {0:F5}'}"/>
+            <Label Text="{Binding Match.Longitude, StringFormat='Lon: {0:F5}'}"/>
 
-            <!-- Edit/Delete buttons -->
-            <HorizontalStackLayout Spacing="10" HorizontalOptions="Center">
-                <Button Text="Edit" Clicked="OnEditClicked"/>
-                <Button Text="Delete" Clicked="OnDeleteClicked"/>
-                <Button Text="Share" Clicked="OnShareClicked" />
+            <HorizontalStackLayout HorizontalOptions="Center" Spacing="10">
+                <Button Text="Edit" Command="{Binding EditCommand}"/>
+                <Button Text="Delete" Command="{Binding DeleteCommand}"/>
+                <Button Text="Share" Command="{Binding ShareCommand}"/>
             </HorizontalStackLayout>
-
-
-            
-
 
         </VerticalStackLayout>
     </ScrollView>
+
 </ContentPage>

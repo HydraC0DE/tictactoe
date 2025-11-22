@@ -914,8 +914,8 @@ namespace tictactoe.Services
             double hvPeak = (hMax + vMax) / 2.0; // strong for O
             double diag = diagStrength;          // strong for X
 
-            double hvThreshold = 16;  // lower than 18
-            double diagThreshold = 12; // increase max diag to still count as O
+            double hvThreshold = 16;  // lower than 18  lower more likely to detect O
+            double diagThreshold = 13; // lower more likey to still cassify as O even with diagonas
 
             if (hvPeak > hvThreshold && diag < diagThreshold && white > 120)
                 return 2; // O

@@ -1,4 +1,5 @@
-﻿using SQLite;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using SQLite;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace tictactoe.Models
 {
-    public class Match
+    public class Match : ObservableObject
     {
         [PrimaryKey, AutoIncrement]
         public int Id { get; set; }

@@ -20,7 +20,7 @@ public partial class PlayPage : ContentPage
     private Game _game;
     private ITicTacToeSolver _solver;
     public string BestMove { get; set; }
-  
+
 
     public int Row { get; set; }
     public int Col { get; set; }
@@ -33,22 +33,22 @@ public partial class PlayPage : ContentPage
             if (string.IsNullOrEmpty(value))
                 return;
 
-           
-                string unescaped = Uri.UnescapeDataString(value);
-                var options = new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true,
-                    WriteIndented = false
-                };
-                
-                _game = JsonSerializer.Deserialize<Game>(unescaped, options);
 
-            
+            string unescaped = Uri.UnescapeDataString(value);
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                WriteIndented = false
+            };
+
+            _game = JsonSerializer.Deserialize<Game>(unescaped, options);
+
+
             if (_game != null)
             {
-                
+
                 lblBestMove.Text = $"Suggested move: ({Row}, {Col})";
-                
+
                 //UglyHelper();
                 InitializeBoardGrid();
             }
@@ -71,7 +71,7 @@ public partial class PlayPage : ContentPage
 
     }
 
-    
+
 
     private async Task SaveMatchAsync()
     {
@@ -134,7 +134,7 @@ public partial class PlayPage : ContentPage
                     BackgroundColor = Colors.LightGray,
                     Text = _game.Board[r, c] == 1 ? "X" :
                            _game.Board[r, c] == 2 ? "O" : "",
-                            IsEnabled = false
+                    IsEnabled = false
                 };
 
                 int row = r;
@@ -154,14 +154,14 @@ public partial class PlayPage : ContentPage
 
     private async void UpdateCell(int row, int col)
     {
-        
+
         var btn = _boardButtons[row, col];
         btn.Text = _game.Board[row, col] == 1 ? "X" :
                    _game.Board[row, col] == 2 ? "O" : "";
-        
+
         if (_game.IsTerminal)
         {
-            
+
             btnAIMove.IsEnabled = false;
             // Disable the entire board
             foreach (var b in _boardButtons)
@@ -180,7 +180,7 @@ public partial class PlayPage : ContentPage
                 await SaveMatchAsync();
             }
         }
-    
+
     }
     private async void EnableCorrectOnes()
     {

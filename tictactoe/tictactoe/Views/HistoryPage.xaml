@@ -1,28 +1,58 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="tictactoe.Views.HistoryPage"
-             Title="Match History">
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:behaviors="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+    xmlns:viewmodels="clr-namespace:tictactoe.ViewModels"
+    x:Class="tictactoe.Views.HistoryPage"
+    Title="Match History">
 
-    <ListView x:Name="MatchesList"
-          ItemSelected="OnMatchSelected"
-          HasUnevenRows="True"
-          SeparatorVisibility="Default">
+    <ListView
+    ItemsSource="{Binding Matches}"
+    SelectedItem="{Binding SelectedMatch, Mode=TwoWay}"
+    HasUnevenRows="True"
+    SeparatorVisibility="Default"
+    BackgroundColor="#F5F5F5"
+    Margin="10"
+    RowHeight="100">
 
         <ListView.ItemTemplate>
             <DataTemplate>
                 <ViewCell>
-                    <StackLayout Padding="10">
-                        <Label Text="{Binding Result, StringFormat='Winner of the game: {0}'}" FontAttributes="Bold" />
-                        <Label Text="{Binding Date, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" />
-                        <Label Text="{Binding Latitude, StringFormat='Lat: {0:F5}'}" />
-                        <Label Text="{Binding Longitude, StringFormat='Lon: {0:F5}'}" />
-                    </StackLayout>
+                    <Border
+                    Stroke="#DDD"
+                    StrokeThickness="1"
+                    BackgroundColor="White"
+                    Padding="15"
+                    Margin="5">
+
+                        <VerticalStackLayout Spacing="8">
+
+                            <Label Text="{Binding Result, StringFormat='Winner: {0}'}"
+                               FontAttributes="Bold"
+                               FontSize="20"
+                               TextColor="#333" />
+
+                            <Label Text="{Binding Date, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"
+                               FontSize="16"
+                               TextColor="#666" />
+
+                            <HorizontalStackLayout Spacing="20">
+                                <Label Text="{Binding Latitude, StringFormat='Lat: {0:F5}'}"
+                                   FontSize="16"
+                                   TextColor="#666" />
+                                <Label Text="{Binding Longitude, StringFormat='Lon: {0:F5}'}"
+                                   FontSize="16"
+                                   TextColor="#666" />
+                            </HorizontalStackLayout>
+
+                        </VerticalStackLayout>
+                    </Border>
                 </ViewCell>
             </DataTemplate>
         </ListView.ItemTemplate>
     </ListView>
 
 
-</ContentPage>
 
+</ContentPage>
