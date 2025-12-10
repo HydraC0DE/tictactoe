@@ -41,7 +41,6 @@ namespace tictactoe.Services
         {
             if (positions.Count == 0) return positions;
 
-            // 1st pass: normal clustering
             var sorted = positions.OrderBy(x => x).ToList();
             var clusters = new List<List<int>>();
             var currentCluster = new List<int> { sorted[0] };
@@ -60,7 +59,6 @@ namespace tictactoe.Services
 
             var averages = clusters.Select(c => (int)c.Average()).ToList();
 
-            // 2nd pass: merge clusters that are still very close
             var merged = new List<int>();
             merged.Add(averages[0]);
 
@@ -102,7 +100,7 @@ namespace tictactoe.Services
         {
             var mat = Cv2.ImRead(boardImagePath, ImreadModes.Color);
 
-            // --- 1. Preprocessing: grayscale, bilateral filter, adaptive threshold ---
+            
             using var gray = new Mat();
             Cv2.CvtColor(mat, gray, ColorConversionCodes.BGR2GRAY);
             Scalar meanVal = Cv2.Mean(gray);
@@ -132,41 +130,40 @@ namespace tictactoe.Services
             var context = Android.App.Application.Context;
             await SaveToGalleryAsync(context, morph, "debug_grid_mask.png");
 
-            //rotate here
-            // --- Morphological opening to clean up noise ---
+            
+         
             using var openKernel = Cv2.GetStructuringElement(MorphShapes.Rect, new OpenCvSharp.Size(5, 5));
             using var opened = new Mat();
 
-            // Try 2–3 iterations
+            // 2 iteráció
             Cv2.MorphologyEx(morph, opened, MorphTypes.Open, openKernel, iterations: 2);
 
 
             // Debug save
             await SaveToGalleryAsync(context, opened, "debug_opening.png");
 
-            // Use 'opened' instead of 'morph' from this point forward
+            
             var maskForRotation = opened.Clone();
 
 
-            // 1) Hough detect (use the morph mask you already computed)
             LineSegmentPoint[] hough = Cv2.HoughLinesP(
                 opened,          // binary mask
                 1,              // rho
                 Math.PI / 180,  // theta
                 80,             // threshold (votes) - tuned to pick strong lines
-                Math.Max(30, opened.Width / 10), // minLineLength (tweakable)
+                Math.Max(30, opened.Width / 10), // minLineLength 
                 Math.Max(5, opened.Width / 200)   // maxLineGap
             );
 
             // debug: visualize Hough lines and compute simple stats
             var linesForDebug = hough ?? Array.Empty<LineSegmentPoint>();
 
-            // Create color overlay for visualization
+            // create color overlay for visualization
             using var overlay = new Mat();
             Cv2.CvtColor(opened, overlay, ColorConversionCodes.GRAY2BGR);
 
 
-            // Collect stats
+           
             var angles = new List<double>();
             var lengths = new List<double>();
             var horizontalDetected = new List<LineSegmentPoint>();
@@ -202,54 +199,25 @@ namespace tictactoe.Services
                 Cv2.Line(overlay, ln.P1, ln.P2, color, thickness);
             }
 
-            // Compute diagnostics (median, weighted mean by length, longest)
-            double medianAngle = 0.0;
-            double weightedMean = 0.0;
-            double longest = 0.0;
-            int count = angles.Count;
-
-            if (count > 0)
-            {
-                var sortedAngles = angles.OrderBy(a => a).ToList();
-                medianAngle = (count % 2 == 1) ? sortedAngles[count / 2] : (sortedAngles[count / 2 - 1] + sortedAngles[count / 2]) / 2.0;
-
-                // weighted mean (weight = line length)
-                double sumw = 0, sumwa = 0;
-                for (int i = 0; i < count; i++)
-                {
-                    double dx = linesForDebug[i].P2.X - linesForDebug[i].P1.X;
-                    double dy = linesForDebug[i].P2.Y - linesForDebug[i].P1.Y;
-                    double len = Math.Sqrt(dx * dx + dy * dy);
-                    sumw += len;
-                    sumwa += (NormalizeAngleForMean(angles[i]) * len); // helper below
-                    if (len > longest) longest = len;
-                }
-                if (sumw > 0) weightedMean = sumwa / sumw;
-                // normalize back to -180..180 for display
-                weightedMean = NormalizeAngleFromMean(weightedMean);
-            }
-
             // Save debug overlay
             await SaveToGalleryAsync(context, overlay, "debug_hough_overlay.png");
 
-            // DECISION: If ANY good horizontal OR vertical lines exist → SKIP ROTATION
-            bool hasStableOrientation = horizontalDetected.Count > 10 && verticalDetected.Count > 10;
+            // If both vertical and horizontal are above 20 then it doesnt require rotation, 20 may seem high at first but this to avoid cases where the image
+            // was taken so that the 2 lines of an "X" are the horizontal and vertical axis
+            bool hasStableOrientation = horizontalDetected.Count > 20 && verticalDetected.Count > 20;
 
             var mask = opened.Clone();
             if (hasStableOrientation)
             {
+                
                 int tester = horizontalDetected.Count;
                 int tester2 = verticalDetected.Count;
-                
-                // Keep original image — store morph into mask for downstream logic
+
                 mask = opened.Clone();
                 await SaveToGalleryAsync(context, mask, "debug_rotation_skipped.png");
-
-                // → Continue pipeline using `mask`, later
             }
             else
             {
-                // ------------------- Robust rotation using chosen oblique line -------------------
                 if (obliqueDetected.Count > 0)
                 {
                     // pick the longest oblique line (already filtered earlier)
@@ -284,7 +252,7 @@ namespace tictactoe.Services
                     rotMat.Set(0, 2, rotMat.Get<double>(0, 2) + (newW / 2.0 - center.X));
                     rotMat.Set(1, 2, rotMat.Get<double>(1, 2) + (newH / 2.0 - center.Y));
 
-                    // warp into the expanded canvas (important: use newW/newH here)
+                    // warp into the expanded canvas
                     var rotatedMask = new Mat(newH, newW, opened.Type(), Scalar.All(0));
                     Cv2.WarpAffine(
                         opened,
@@ -299,7 +267,7 @@ namespace tictactoe.Services
                     // Save rotated mask for debug
                     await SaveToGalleryAsync(context, rotatedMask, "debug_grid_mask_rotated.png");
 
-                    // Re-run Hough on rotated mask to confirm alignment and draw overlay
+                    // hough again for debug
                     var afterLines = Cv2.HoughLinesP(rotatedMask, 1, Math.PI / 180.0, 80, Math.Max(30, rotatedMask.Width / 10), Math.Max(5, rotatedMask.Width / 200)) ?? Array.Empty<LineSegmentPoint>();
                     using var overlayAfter = new Mat();
                     Cv2.CvtColor(rotatedMask, overlayAfter, ColorConversionCodes.GRAY2BGR);
@@ -317,6 +285,7 @@ namespace tictactoe.Services
 
                     // draw the chosen original line transformed into the rotated canvas (red)
                     // apply rotMat: [a b c; d e f] * [x;y;1]
+                    // these are ONLY for debug and visualization
                     double a00 = rotMat.Get<double>(0, 0), a01 = rotMat.Get<double>(0, 1), a02 = rotMat.Get<double>(0, 2);
                     double a10 = rotMat.Get<double>(1, 0), a11 = rotMat.Get<double>(1, 1), a12 = rotMat.Get<double>(1, 2);
                     OpenCvSharp.Point rp1 = new OpenCvSharp.Point((int)Math.Round(a00 * longestLine.P1.X + a01 * longestLine.P1.Y + a02), (int)Math.Round(a10 * longestLine.P1.X + a11 * longestLine.P1.Y + a12));
@@ -337,26 +306,10 @@ namespace tictactoe.Services
             }
 
 
-            // Helper local functions (put these as private methods in your class if the compiler complains)
-            double NormalizeAngleForMean(double ang)
-            {
-                // Map angle into range [-90,90) then shift so mean works around 0; this helps when angles wrap around ±180
-                double a = ang;
-                while (a <= -90) a += 180;
-                while (a > 90) a -= 180;
-                return a;
-            }
-            double NormalizeAngleFromMean(double ang)
-            {
-                double a = ang;
-                while (a <= -180) a += 360;
-                while (a > 180) a -= 360;
-                return a;
-            }
-            //rotate finsihed
+            
 
 
-            // --- 1. Detect line segments on the binary mask ---
+            
             LineSegmentPoint[] lines = Cv2.HoughLinesP(
                 mask,       // binary mask
                 1,           // rho resolution
@@ -366,7 +319,7 @@ namespace tictactoe.Services
                 10           // max gap
             );
 
-            // --- 2. Separate vertical and horizontal lines ---
+
             var verticalLines = new List<LineSegmentPoint>();
             var horizontalLines = new List<LineSegmentPoint>();
 
@@ -380,7 +333,7 @@ namespace tictactoe.Services
                 else if (Math.Abs(angle) < 10) horizontalLines.Add(line); // strict horizontal
             }
 
-            // --- 3. Compute average positions for clustering ---
+   
             List<int> verticalPositions = verticalLines
                 .Select(l => (l.P1.X + l.P2.X) / 2)
                 .ToList();
@@ -389,7 +342,6 @@ namespace tictactoe.Services
                 .Select(l => (l.P1.Y + l.P2.Y) / 2)
                 .ToList();
 
-            // --- 4. Cluster nearby lines ---
             double avgV = ComputeAverageSpacing(verticalPositions);
             double avgH = ComputeAverageSpacing(horizontalPositions);
 
@@ -401,14 +353,14 @@ namespace tictactoe.Services
             int tolV = (int)(avgV * 0.75);         // ~40% of expected tile width
             int mergeV = (int)(avgV * 5);       // tiles closer than ~1.2× avg should merge
 
-            int tolH = (int)(avgH * 0.60);
+            int tolH = (int)(avgH * 0.75);
             int mergeH = (int)(avgH * 5);
 
             verticalPositions = ClusterLinesAggressive(verticalPositions, tolV, mergeV);
             horizontalPositions = ClusterLinesAggressive(horizontalPositions, tolH, mergeH);
 
 
-            // --- 5. Optional: filter out lines near board edges to remove extra X/O artifacts ---
+
             verticalPositions = verticalPositions
                 .Where(x => x > 5 && x < mask.Width - 5)
                 .ToList();
@@ -417,7 +369,6 @@ namespace tictactoe.Services
                 .Where(y => y > 5 && y < mask.Height - 5)
                 .ToList();
 
-            // --- 6. Generate cell ROIs from intersections ---
             var cellROIs = new List<OpenCvSharp.Rect>();
             for (int i = 0; i < verticalPositions.Count - 1; i++)
             {
@@ -431,7 +382,7 @@ namespace tictactoe.Services
                 }
             }
 
-            // --- 7. Optional: draw ROIs for debug ---
+
             using var debug = new Mat();
             Cv2.CvtColor(mask, debug, ColorConversionCodes.GRAY2BGR);
             foreach (var roi in cellROIs)
@@ -440,21 +391,8 @@ namespace tictactoe.Services
             }
             await SaveToGalleryAsync(context, debug, "debug_cells_gomoku.png");
 
-            // --- 8. Fill Game.Board using contour solidity analysis ---
-
-
-
-            //// INPUTS:
-            //// - mask: thresholded binary image (Mat)
-            //// - cellROIs: list of Rect for each grid cell (15×15 total)
-            //// - context: Android context for SaveToGalleryAsync
 
             var roiScores = new List<(OpenCvSharp.Rect roi, double score)>();
-
-            // ---------------------------------------------------------------
-            // Step 1 — Compute whiteness score for every ROI
-            //           (use only the inner 80% area for scoring)
-            // ---------------------------------------------------------------
             foreach (var roi in cellROIs)
             {
                 int x = Math.Max(0, roi.X);
@@ -464,16 +402,15 @@ namespace tictactoe.Services
 
                 if (w <= 0 || h <= 0) continue;
 
-                // full ROI (saved later)
+                
                 var fullMat = new Mat(mask, new OpenCvSharp.Rect(x, y, w, h));
 
                 int cropW = w; // 100% width
                 int cropH = h; // 100% height
-                // ---- NEW: compute score from INNER AREA ONLY ----
                 if (!hasStableOrientation)
                 {
-                    cropW = (int)(w * 0.90); // 80% width
-                    cropH = (int)(h * 0.90); // 80% height
+                    cropW = (int)(w * 0.90); // 90% width
+                    cropH = (int)(h * 0.90); // 90% height
                 }
 
                 
@@ -496,15 +433,9 @@ namespace tictactoe.Services
             if (roiScores.Count == 0)
                 return new Game();
 
-            // ---------------------------------------------------------------
-            // Step 2 — pick the anchor ROI (highest whiteness)
-            // ---------------------------------------------------------------
             var anchor = roiScores.OrderByDescending(s => s.score).First();
             double anchorScore = anchor.score;
 
-            // ---------------------------------------------------------------
-            // Step 3 — find adjacent neighbors of the anchor
-            // ---------------------------------------------------------------
             int total = roiScores.Count;
             int side = (int)Math.Sqrt(total); // 15 for 15x15
 
@@ -534,9 +465,6 @@ namespace tictactoe.Services
 
             double neighborAvg = neighborScores.Count > 0 ? neighborScores.Average() : anchorScore;
 
-            // ---------------------------------------------------------------
-            // Step 4 — compute weighted adaptive threshold
-            // ---------------------------------------------------------------
             double adaptiveThreshold =
                 (anchorScore * 0.50) +
                 (neighborAvg * 0.30);
@@ -573,7 +501,6 @@ namespace tictactoe.Services
             var distinctColCenters = usefulMatsList.Select(t => t.Cx).Distinct().OrderBy(x => x).ToList();
             var distinctRowCenters = usefulMatsList.Select(t => t.Cy).Distinct().OrderBy(y => y).ToList();
 
-            // If detection collapsed (e.g. only one distinct), try to recover by grouping by rounding
             if (distinctColCenters.Count == 0 || distinctRowCenters.Count == 0)
             {
                 // nothing useful found
@@ -615,26 +542,7 @@ namespace tictactoe.Services
             // create finalBoard placeholder (string) with same dims
             int[,] finalBoard = new int[usedRowsCount, usedColsCount];
 
-            // If you want to save debug images of the reconstructed grid cells:
-            for (int r = 0; r < usedRowsCount; r++)
-            {
-                for (int c = 0; c < usedColsCount; c++)
-                {
-                    var m = grid[r, c];
-                    if (m != null)
-                    {
-                        // save with row/col coordinates for debugging
-                        //await SaveToGalleryAsync(context, m, $"recon_cell_r{r}_c{c}.png");
-                    }
-                }
-            }
 
-            // now `grid` holds the placed ROI Mats and `finalBoard` is ready for later filling
-            // (you can run your X/O classification over grid[r,c] and fill finalBoard accordingly)
-
-            // ------------------------------------------------------------
-            // Step X — classify each ROI as "X" or "O"
-            // ------------------------------------------------------------
             for (int r = 0; r < usedRowsCount; r++)
             {
                 for (int c = 0; c < usedColsCount; c++)
@@ -651,41 +559,18 @@ namespace tictactoe.Services
 
                 }
             }
-            
-
-
-            
-            //string resultToPass = "Not finished";
-            //string nextMoveToPass = "";
-            //int[,] boardToPass = new int[15, 15];
-            //boardToPass[7, 7] = 1; //place initial X
-            ////find one X in finalBoard, that goes to boardToPass[7,7]
-            ////fill the rest
-            ////if X or O has 5 in any way out of the 8, parse the correct result
-            ////if X>O, its Os turn, else its Xs turn
-
-            //var game = new Game
-            //{
-            //    Board = finalBoard,
-            //    Result = resultToPass,
-            //    NextMove = nextMoveToPass
-            //};
-
-            //return game;
 
             string resultToPass = "Not finished";
             string nextMoveToPass = "";
 
-            // finalBoard is a compact board: rows × cols based on detected grid
+
             int rows = finalBoard.GetLength(0);
             int cols = finalBoard.GetLength(1);
 
-            // Create full 15×15 output board
+
             int[,] boardToPass = new int[15, 15];
 
-            // --------------------------------------------------------
-            // STEP 1 — find one X in the detected board and center it
-            // --------------------------------------------------------
+
             (int r, int c)? firstX = null;
 
             for (int r0 = 0; r0 < rows; r0++)
@@ -718,7 +603,7 @@ namespace tictactoe.Services
                 }
             }
 
-            // If still no symbol at all → empty game
+            // if still no symbol at all → empty game
             if (firstX == null)
             {
                 var emptyGame = new Game
@@ -735,13 +620,11 @@ namespace tictactoe.Services
             // target center of 15×15 grid
             int center2 = 7;   // boardToPass[7,7] is middle
 
-            // how much we need to shift the detected board so fx,fy → 7,7
+
             int shiftR = center2 - fx;
             int shiftC = center2 - fy;
 
-            // --------------------------------------------------------
-            // STEP 2 — copy finalBoard into boardToPass with centering
-            // --------------------------------------------------------
+
             for (int r0 = 0; r0 < rows; r0++)
             {
                 for (int c0 = 0; c0 < cols; c0++)
@@ -754,9 +637,7 @@ namespace tictactoe.Services
                 }
             }
 
-            // --------------------------------------------------------
-            // STEP 3 — determine winner (any 5 in a row)
-            // --------------------------------------------------------
+
             bool CheckFive(int player)
             {
                 for (int r = 0; r < 15; r++)
@@ -775,12 +656,12 @@ namespace tictactoe.Services
                             Enumerable.Range(0, 5).All(i => boardToPass[r + i, c] == player))
                             return true;
 
-                        // diag ↘
+                        // diag 
                         if (r <= 15 - 5 && c <= 15 - 5 &&
                             Enumerable.Range(0, 5).All(i => boardToPass[r + i, c + i] == player))
                             return true;
 
-                        // diag ↗
+                        // diag 
                         if (r >= 4 && c <= 15 - 5 &&
                             Enumerable.Range(0, 5).All(i => boardToPass[r - i, c + i] == player))
                             return true;
@@ -792,9 +673,6 @@ namespace tictactoe.Services
             bool xWin = CheckFive(1);
             bool oWin = CheckFive(2);
 
-            // --------------------------------------------------------
-            // STEP 4 — assign result
-            // --------------------------------------------------------
             if (xWin && !oWin)
                 resultToPass = "X wins";
             else if (oWin && !xWin)
@@ -804,9 +682,7 @@ namespace tictactoe.Services
             else
                 resultToPass = "Not finished";
 
-            // --------------------------------------------------------
-            // STEP 5 — determine whose turn it is
-            // --------------------------------------------------------
+            //whose turn
             int countX = 0, countO = 0;
             foreach (int v in boardToPass)
             {
@@ -823,9 +699,7 @@ namespace tictactoe.Services
                 nextMoveToPass = "-"; // game over
             }
 
-            // --------------------------------------------------------
-            // FINAL OBJECT
-            // --------------------------------------------------------
+
             var game = new Game
             {
                 Board = boardToPass,
@@ -857,7 +731,6 @@ namespace tictactoe.Services
             int rows = resized.Rows;
             int cols = resized.Cols;
 
-            // ---- compute inner 90% bounds ----
             int marginR = (int)(rows * 0.05); // remove 5% top + 5% bottom
             int marginC = (int)(cols * 0.05); // remove 5% left + 5% right
 
@@ -866,7 +739,6 @@ namespace tictactoe.Services
             int c0 = marginC;
             int c1 = cols - marginC;
 
-            // horizontal & vertical stroke sums inside inner 90%
             double[] h = new double[rows];
             double[] v = new double[cols];
 
@@ -885,7 +757,6 @@ namespace tictactoe.Services
             double hMax = h.Max();
             double vMax = v.Max();
 
-            // ---- diagonal scan also only inside the same inner 90% ----
             double diag1 = 0;
             double diag2 = 0;
 
@@ -898,7 +769,7 @@ namespace tictactoe.Services
                         diag1++;
                 }
 
-                int c_anti = (cols - 1 - i); // anti-diagonal
+                int c_anti = (cols - 1 - i);
                 if (c_anti >= c0 && c_anti < c1)
                 {
                     if (resized.At<byte>(i, c_anti) > 0)
@@ -908,14 +779,14 @@ namespace tictactoe.Services
 
             double diagStrength = Math.Max(diag1, diag2);
 
-            // Use total white from original FULL roi (not resized inner region)
+
             double white = Cv2.CountNonZero(roi);
 
             double hvPeak = (hMax + vMax) / 2.0; // strong for O
             double diag = diagStrength;          // strong for X
 
-            double hvThreshold = 16;  // lower than 18  lower more likely to detect O
-            double diagThreshold = 13; // lower more likey to still cassify as O even with diagonas
+            double hvThreshold = 16;  // lower more likely to detect O
+            double diagThreshold = 13; // lower more likey to still cassify as O even with diagonals
 
             if (hvPeak > hvThreshold && diag < diagThreshold && white > 120)
                 return 2; // O
@@ -925,7 +796,6 @@ namespace tictactoe.Services
 
  
 
-
-    }
+            }
 
 }
